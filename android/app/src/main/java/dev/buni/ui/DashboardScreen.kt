@@ -36,6 +36,7 @@ import androidx.compose.ui.unit.sp
 import dev.buni.theme.Black
 import dev.buni.theme.Emerald500
 import dev.buni.theme.White
+import dev.buni.theme.Zinc400
 import dev.buni.theme.Zinc500
 import dev.buni.theme.Zinc600
 import dev.buni.theme.Zinc700
