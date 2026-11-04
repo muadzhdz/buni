@@ -57,8 +57,6 @@ import dev.buni.core.Language
 import dev.buni.core.buniString
 import dev.buni.theme.Emerald500
 import dev.buni.theme.buniColors
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 
 enum class EngineMode {
     SHIELD,
@@ -87,7 +85,7 @@ fun DashboardScreen(
             .statusBarsPadding()
             .navigationBarsPadding()
             .verticalScroll(scrollState)
-            .padding(horizontal = 20.dp, vertical = 20.dp)
+            .padding(horizontal = 20.dp, vertical = 16.dp)
     ) {
         HeaderSection(
             isActive = isActive,
@@ -99,14 +97,14 @@ fun DashboardScreen(
             onToggleLanguage = onToggleLanguage
         )
 
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(20.dp))
 
         SlidingModeSelector(
             currentMode = selectedMode,
             onModeSelect = { selectedMode = it }
         )
 
-        Spacer(modifier = Modifier.height(30.dp))
+        Spacer(modifier = Modifier.height(24.dp))
 
         Box(
             modifier = Modifier.fillMaxWidth(),
@@ -119,19 +117,16 @@ fun DashboardScreen(
             )
         }
 
-        Spacer(modifier = Modifier.height(30.dp))
+        Spacer(modifier = Modifier.height(24.dp))
 
-        TelemetryStrip(
+        UnifiedTelemetryCard(
             queries = stats.first,
             blocked = stats.second,
-            latency = stats.third
+            latency = stats.third,
+            logs = logs
         )
 
-        Spacer(modifier = Modifier.height(20.dp))
-
-        InspectionConsole(logs = logs)
-
-        Spacer(modifier = Modifier.height(80.dp))
+        Spacer(modifier = Modifier.height(110.dp))
     }
 }
 
@@ -459,25 +454,139 @@ private fun InteractivePowerButton(
 }
 
 @Composable
-private fun TelemetryStrip(
+private fun UnifiedTelemetryCard(
     queries: Long,
     blocked: Long,
-    latency: Long
+    latency: Long,
+    logs: List<String>
 ) {
     val colors = buniColors
+    var filterBlockedOnly by remember { mutableStateOf(false) }
 
-    Row(
+    val displayedLogs = remember(logs, filterBlockedOnly) {
+        if (filterBlockedOnly) {
+            logs.filter {
+                it.contains("SINK", ignoreCase = true) ||
+                it.contains("BLOCK", ignoreCase = true) ||
+                it.contains("DROP", ignoreCase = true)
+            }
+        } else {
+            logs
+        }
+    }
+
+    Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(8.dp))
+            .clip(RoundedCornerShape(12.dp))
             .background(colors.surface)
-            .border(1.dp, colors.border, RoundedCornerShape(8.dp))
-            .padding(vertical = 14.dp, horizontal = 16.dp),
-        horizontalArrangement = Arrangement.SpaceBetween
+            .border(1.dp, colors.border, RoundedCornerShape(12.dp))
     ) {
-        StatItem(label = buniString("queries"), value = queries.toString())
-        StatItem(label = buniString("blocked"), value = blocked.toString())
-        StatItem(label = buniString("latency"), value = "${latency}ms")
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 14.dp, horizontal = 16.dp),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            StatItem(label = buniString("queries"), value = queries.toString())
+            StatItem(label = buniString("blocked"), value = blocked.toString())
+            StatItem(label = buniString("latency"), value = "${latency}ms")
+        }
+
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(1.dp)
+                .background(colors.border)
+        )
+
+        Column(modifier = Modifier.padding(14.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = buniString("live_inspection"),
+                    color = colors.textMuted,
+                    fontSize = 10.sp,
+                    fontFamily = FontFamily.Monospace,
+                    letterSpacing = 1.sp
+                )
+
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(if (!filterBlockedOnly) colors.surfaceVariant else Color.Transparent)
+                            .clickable { filterBlockedOnly = false }
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                    ) {
+                        Text(
+                            text = buniString("all"),
+                            color = if (!filterBlockedOnly) colors.textPrimary else colors.textMuted,
+                            fontSize = 9.sp,
+                            fontFamily = FontFamily.Monospace,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.width(4.dp))
+
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(if (filterBlockedOnly) colors.surfaceVariant else Color.Transparent)
+                            .clickable { filterBlockedOnly = true }
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                    ) {
+                        Text(
+                            text = buniString("blocked"),
+                            color = if (filterBlockedOnly) Emerald500 else colors.textMuted,
+                            fontSize = 9.sp,
+                            fontFamily = FontFamily.Monospace,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.width(6.dp))
+
+                    Text(
+                        text = "${displayedLogs.size} ${buniString("events")}",
+                        color = colors.textMuted,
+                        fontSize = 9.sp,
+                        fontFamily = FontFamily.Monospace
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            if (displayedLogs.isEmpty()) {
+                Text(
+                    text = if (filterBlockedOnly) "> no blocked queries recorded yet" else buniString("awaiting_packets"),
+                    color = colors.textMuted,
+                    fontSize = 11.sp,
+                    fontFamily = FontFamily.Monospace,
+                    modifier = Modifier.padding(vertical = 18.dp)
+                )
+            } else {
+                LazyColumn(modifier = Modifier.height(140.dp)) {
+                    items(displayedLogs) { logLine ->
+                        val isBlockedLine = logLine.contains("SINK", ignoreCase = true) ||
+                                            logLine.contains("BLOCK", ignoreCase = true) ||
+                                            logLine.contains("DROP", ignoreCase = true)
+                        Text(
+                            text = "> $logLine",
+                            color = if (isBlockedLine) Emerald500 else colors.textSecondary,
+                            fontSize = 10.sp,
+                            fontFamily = FontFamily.Monospace,
+                            maxLines = 1
+                        )
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -501,118 +610,5 @@ private fun StatItem(label: String, value: String) {
             fontFamily = FontFamily.Monospace,
             fontWeight = FontWeight.Bold
         )
-    }
-}
-
-@Composable
-private fun InspectionConsole(logs: List<String>) {
-    val colors = buniColors
-    var filterBlockedOnly by remember { mutableStateOf(false) }
-
-    val displayedLogs = remember(logs, filterBlockedOnly) {
-        if (filterBlockedOnly) {
-            logs.filter {
-                it.contains("SINK", ignoreCase = true) ||
-                it.contains("BLOCK", ignoreCase = true) ||
-                it.contains("DROP", ignoreCase = true)
-            }
-        } else {
-            logs
-        }
-    }
-
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(8.dp))
-            .background(colors.surface)
-            .border(1.dp, colors.border, RoundedCornerShape(8.dp))
-            .padding(12.dp)
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = buniString("live_inspection"),
-                color = colors.textMuted,
-                fontSize = 10.sp,
-                fontFamily = FontFamily.Monospace,
-                letterSpacing = 1.sp
-            )
-
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(4.dp))
-                        .background(if (!filterBlockedOnly) colors.surfaceVariant else Color.Transparent)
-                        .clickable { filterBlockedOnly = false }
-                        .padding(horizontal = 6.dp, vertical = 2.dp)
-                ) {
-                    Text(
-                        text = buniString("all"),
-                        color = if (!filterBlockedOnly) colors.textPrimary else colors.textMuted,
-                        fontSize = 9.sp,
-                        fontFamily = FontFamily.Monospace,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-
-                Spacer(modifier = Modifier.width(4.dp))
-
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(4.dp))
-                        .background(if (filterBlockedOnly) colors.surfaceVariant else Color.Transparent)
-                        .clickable { filterBlockedOnly = true }
-                        .padding(horizontal = 6.dp, vertical = 2.dp)
-                ) {
-                    Text(
-                        text = buniString("blocked"),
-                        color = if (filterBlockedOnly) Emerald500 else colors.textMuted,
-                        fontSize = 9.sp,
-                        fontFamily = FontFamily.Monospace,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-
-                Spacer(modifier = Modifier.width(6.dp))
-
-                Text(
-                    text = "${displayedLogs.size} ${buniString("events")}",
-                    color = colors.textMuted,
-                    fontSize = 9.sp,
-                    fontFamily = FontFamily.Monospace
-                )
-            }
-        }
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        if (displayedLogs.isEmpty()) {
-            Text(
-                text = if (filterBlockedOnly) "> no blocked queries recorded yet" else buniString("awaiting_packets"),
-                color = colors.textMuted,
-                fontSize = 11.sp,
-                fontFamily = FontFamily.Monospace,
-                modifier = Modifier.padding(vertical = 24.dp)
-            )
-        } else {
-            LazyColumn(modifier = Modifier.height(270.dp)) {
-                items(displayedLogs) { logLine ->
-                    val isBlockedLine = logLine.contains("SINK", ignoreCase = true) ||
-                                        logLine.contains("BLOCK", ignoreCase = true) ||
-                                        logLine.contains("DROP", ignoreCase = true)
-                    Text(
-                        text = "> $logLine",
-                        color = if (isBlockedLine) Emerald500 else colors.textSecondary,
-                        fontSize = 10.sp,
-                        fontFamily = FontFamily.Monospace,
-                        maxLines = 1
-                    )
-                }
-            }
-        }
     }
 }
