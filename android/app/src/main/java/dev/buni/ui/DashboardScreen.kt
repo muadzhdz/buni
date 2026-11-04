@@ -1,12 +1,16 @@
 package dev.buni.ui
 
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -14,6 +18,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -33,6 +38,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -72,11 +78,11 @@ fun DashboardScreen(
             .verticalScroll(scrollState)
             .padding(horizontal = 20.dp, vertical = 20.dp)
     ) {
-        HeaderSection(isActive = isActive, latencyMs = stats.third)
+        HeaderSection(isActive = isActive, latencyMs = stats.third, mode = selectedMode)
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        ModeSelector(
+        SlidingModeSelector(
             currentMode = selectedMode,
             onModeSelect = { selectedMode = it }
         )
@@ -89,6 +95,7 @@ fun DashboardScreen(
         ) {
             MasterPowerButton(
                 isActive = isActive,
+                mode = selectedMode,
                 onToggle = onTogglePower
             )
         }
@@ -108,7 +115,7 @@ fun DashboardScreen(
 }
 
 @Composable
-private fun HeaderSection(isActive: Boolean, latencyMs: Long) {
+private fun HeaderSection(isActive: Boolean, latencyMs: Long, mode: EngineMode) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
@@ -123,7 +130,7 @@ private fun HeaderSection(isActive: Boolean, latencyMs: Long) {
                 letterSpacing = 2.sp
             )
             Text(
-                text = "the hidden network shield",
+                text = if (mode == EngineMode.SHIELD) "the hidden network shield" else "wireguard privacy tunnel",
                 color = Zinc500,
                 fontSize = 12.sp
             )
@@ -156,32 +163,56 @@ private fun HeaderSection(isActive: Boolean, latencyMs: Long) {
 }
 
 @Composable
-private fun ModeSelector(
+private fun SlidingModeSelector(
     currentMode: EngineMode,
     onModeSelect: (EngineMode) -> Unit
 ) {
-    Row(
+    BoxWithConstraints(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(8.dp))
+            .clip(RoundedCornerShape(10.dp))
             .background(Zinc950)
-            .border(1.dp, Zinc800, RoundedCornerShape(8.dp))
+            .border(1.dp, Zinc800, RoundedCornerShape(10.dp))
             .padding(4.dp)
     ) {
-        ModeTab(
-            title = "SHIELD",
-            subtitle = "Local Zero-Latency",
-            selected = currentMode == EngineMode.SHIELD,
-            onClick = { onModeSelect(EngineMode.SHIELD) },
-            modifier = Modifier.weight(1f)
+        val tabWidth = maxWidth / 2
+        val targetOffset = if (currentMode == EngineMode.SHIELD) 0.dp else tabWidth
+
+        val indicatorOffset by animateDpAsState(
+            targetValue = targetOffset,
+            animationSpec = spring(
+                dampingRatio = Spring.DampingRatioLowBouncy,
+                stiffness = Spring.StiffnessMediumLow
+            ),
+            label = "pill_slide"
         )
-        ModeTab(
-            title = "TUNNEL",
-            subtitle = "WireGuard Node",
-            selected = currentMode == EngineMode.TUNNEL,
-            onClick = { onModeSelect(EngineMode.TUNNEL) },
-            modifier = Modifier.weight(1f)
+
+        Box(
+            modifier = Modifier
+                .offset(x = indicatorOffset)
+                .width(tabWidth)
+                .height(48.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .background(Zinc800)
+                .border(1.dp, Zinc700, RoundedCornerShape(8.dp))
         )
+
+        Row(modifier = Modifier.fillMaxWidth()) {
+            ModeTab(
+                title = "SHIELD",
+                subtitle = "Local Zero-Latency",
+                selected = currentMode == EngineMode.SHIELD,
+                onClick = { onModeSelect(EngineMode.SHIELD) },
+                modifier = Modifier.weight(1f)
+            )
+            ModeTab(
+                title = "TUNNEL",
+                subtitle = "WireGuard Node",
+                selected = currentMode == EngineMode.TUNNEL,
+                onClick = { onModeSelect(EngineMode.TUNNEL) },
+                modifier = Modifier.weight(1f)
+            )
+        }
     }
 }
 
@@ -193,19 +224,15 @@ private fun ModeTab(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val bg by animateColorAsState(
-        targetValue = if (selected) Zinc800 else Zinc950,
-        animationSpec = tween(150),
-        label = "tab_bg"
-    )
-
     Column(
         modifier = modifier
-            .clip(RoundedCornerShape(6.dp))
-            .background(bg)
+            .height(48.dp)
+            .clip(RoundedCornerShape(8.dp))
+            .background(Color.Transparent)
             .clickable(onClick = onClick)
-            .padding(vertical = 10.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
+            .padding(vertical = 6.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
     ) {
         Text(
             text = title,
@@ -225,6 +252,7 @@ private fun ModeTab(
 @Composable
 private fun MasterPowerButton(
     isActive: Boolean,
+    mode: EngineMode,
     onToggle: () -> Unit
 ) {
     val borderColor by animateColorAsState(
@@ -256,11 +284,28 @@ private fun MasterPowerButton(
         Spacer(modifier = Modifier.height(14.dp))
 
         Text(
-            text = if (isActive) "PROTECTION ENGAGED" else "TAP TO ENGAGE",
+            text = if (isActive) {
+                if (mode == EngineMode.SHIELD) "SHIELD ENGAGED" else "TUNNEL ENGAGED"
+            } else {
+                if (mode == EngineMode.SHIELD) "TAP TO SHIELD" else "TAP TO TUNNEL"
+            },
             color = if (isActive) White else Zinc500,
             fontSize = 11.sp,
             fontFamily = FontFamily.Monospace,
             letterSpacing = 1.sp
+        )
+
+        Spacer(modifier = Modifier.height(4.dp))
+
+        Text(
+            text = if (mode == EngineMode.SHIELD) {
+                "Direct WAN · Local DNS Sinkhole · Cloudflare"
+            } else {
+                "Encrypted Uplink · Remote WireGuard Node"
+            },
+            color = Zinc600,
+            fontSize = 10.sp,
+            fontFamily = FontFamily.Monospace
         )
     }
 }

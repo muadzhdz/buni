@@ -20,9 +20,9 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.io.FileInputStream
 import java.io.FileOutputStream
-import java.io.InputStream
-import java.net.HttpURLConnection
-import java.net.URL
+import java.net.DatagramPacket
+import java.net.DatagramSocket
+import java.net.InetAddress
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -86,9 +86,9 @@ class BuniVpnService : VpnService() {
         val builder = Builder().apply {
             setSession("Buni")
             setMtu(1500)
-            addAddress("10.233.0.1", 24)
-            addDnsServer("10.233.0.1")
-            addRoute("10.233.0.1", 32)
+            addAddress("10.233.0.1", 30)
+            addDnsServer("10.233.0.2")
+            addRoute("10.233.0.2", 32)
             setBlocking(true)
         }
 
@@ -130,10 +130,6 @@ class BuniVpnService : VpnService() {
         while (serviceScope.isActive) {
             try {
                 val length = inStream.read(buffer)
-                if (length <= 0) {
-                    continue
-                }
-
                 if (length < 28) {
                     continue
                 }
@@ -181,16 +177,18 @@ class BuniVpnService : VpnService() {
                     emitLog("[$now] SINK $domain -> DROPPED (0ms)")
                 } else {
                     val start = System.currentTimeMillis()
-                    val dohReply = queryCloudflareDoh(dnsPayload)
+                    val upstreamReply = forwardDnsProtected(dnsPayload)
                     val duration = System.currentTimeMillis() - start
                     lastLatency.set(duration)
 
-                    if (dohReply != null && dohReply.isNotEmpty()) {
-                        val replyPacket = craftIPv4UdpReply(buffer, ihl, dohReply)
+                    if (upstreamReply != null && upstreamReply.isNotEmpty()) {
+                        val replyPacket = craftIPv4UdpReply(buffer, ihl, upstreamReply)
                         outStream.write(replyPacket)
-                        emitLog("[$now] DOH  $domain -> RESOLVED (${duration}ms)")
+                        val displayDomain = if (domain.isNotEmpty()) domain else "dns.query"
+                        emitLog("[$now] PASS $displayDomain -> RESOLVED (${duration}ms)")
                     } else {
-                        emitLog("[$now] DOH  $domain -> TIMEOUT")
+                        val displayDomain = if (domain.isNotEmpty()) domain else "dns.query"
+                        emitLog("[$now] PASS $displayDomain -> TIMEOUT")
                     }
                 }
 
@@ -205,6 +203,29 @@ class BuniVpnService : VpnService() {
                     break
                 }
             }
+        }
+    }
+
+    private fun forwardDnsProtected(payload: ByteArray): ByteArray? {
+        var socket: DatagramSocket? = null
+        return try {
+            socket = DatagramSocket()
+            protect(socket)
+            socket.soTimeout = 2500
+
+            val targetIp = InetAddress.getByAddress(byteArrayOf(1, 1, 1, 1))
+            val sendPacket = DatagramPacket(payload, payload.size, targetIp, 53)
+            socket.send(sendPacket)
+
+            val recvBuffer = ByteArray(1500)
+            val recvPacket = DatagramPacket(recvBuffer, recvBuffer.size)
+            socket.receive(recvPacket)
+
+            recvBuffer.copyOf(recvPacket.length)
+        } catch (e: Exception) {
+            null
+        } finally {
+            socket?.close()
         }
     }
 
@@ -248,29 +269,6 @@ class BuniVpnService : VpnService() {
         }
 
         return labels.joinToString(".")
-    }
-
-    private fun queryCloudflareDoh(queryPayload: ByteArray): ByteArray? {
-        return try {
-            val url = URL("https://cloudflare-dns.com/dns-query")
-            val conn = (url.openConnection() as HttpURLConnection).apply {
-                requestMethod = "POST"
-                connectTimeout = 3000
-                readTimeout = 3000
-                doOutput = true
-                setRequestProperty("Content-Type", "application/dns-message")
-                setRequestProperty("Accept", "application/dns-message")
-            }
-            conn.outputStream.use { it.write(queryPayload) }
-
-            if (conn.responseCode == 200) {
-                conn.inputStream.use { it.readBytes() }
-            } else {
-                null
-            }
-        } catch (e: Exception) {
-            null
-        }
     }
 
     private fun buildSinkholeDnsResponse(query: ByteArray): ByteArray? {
