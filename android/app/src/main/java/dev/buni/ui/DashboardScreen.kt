@@ -11,6 +11,7 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -47,7 +48,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathOperation
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -57,6 +63,8 @@ import dev.buni.core.Language
 import dev.buni.core.buniString
 import dev.buni.theme.Emerald500
 import dev.buni.theme.buniColors
+import kotlin.math.cos
+import kotlin.math.sin
 
 enum class EngineMode {
     SHIELD,
@@ -126,7 +134,7 @@ fun DashboardScreen(
             logs = logs
         )
 
-        Spacer(modifier = Modifier.height(110.dp))
+        Spacer(modifier = Modifier.height(80.dp))
     }
 }
 
@@ -173,7 +181,7 @@ private fun HeaderSection(
                     .background(colors.surface)
                     .border(1.dp, colors.border, RoundedCornerShape(8.dp))
                     .clickable(onClick = onToggleLanguage)
-                    .padding(horizontal = 14.dp, vertical = 8.dp)
+                    .padding(horizontal = 14.dp, vertical = 9.dp)
             ) {
                 Text(
                     text = if (currentLanguage == Language.EN) "EN" else "ID",
@@ -192,13 +200,11 @@ private fun HeaderSection(
                     .background(colors.surface)
                     .border(1.dp, colors.border, RoundedCornerShape(8.dp))
                     .clickable(onClick = onToggleTheme)
-                    .padding(horizontal = 14.dp, vertical = 8.dp)
+                    .padding(horizontal = 14.dp, vertical = 10.dp)
             ) {
-                Text(
-                    text = if (isDarkMode) "☾" else "☼",
-                    color = colors.textPrimary,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Bold
+                ThemeToggleIcon(
+                    isDarkMode = isDarkMode,
+                    color = colors.textPrimary
                 )
             }
 
@@ -209,7 +215,7 @@ private fun HeaderSection(
                     .clip(RoundedCornerShape(8.dp))
                     .background(colors.surface)
                     .border(1.dp, colors.border, RoundedCornerShape(8.dp))
-                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                    .padding(horizontal = 12.dp, vertical = 9.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Box(
@@ -226,6 +232,42 @@ private fun HeaderSection(
                     fontFamily = FontFamily.Monospace,
                     fontWeight = FontWeight.SemiBold
                 )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ThemeToggleIcon(isDarkMode: Boolean, color: Color) {
+    Canvas(modifier = Modifier.size(16.dp)) {
+        if (isDarkMode) {
+            val center = Offset(size.width * 0.44f, size.height * 0.5f)
+            val radius = size.minDimension * 0.44f
+            val baseCircle = Path().apply {
+                addOval(Rect(center.x - radius, center.y - radius, center.x + radius, center.y + radius))
+            }
+            val cutoutCenter = Offset(center.x + radius * 0.52f, center.y - radius * 0.36f)
+            val cutoutRadius = radius * 0.88f
+            val cutoutCircle = Path().apply {
+                addOval(Rect(cutoutCenter.x - cutoutRadius, cutoutCenter.y - cutoutRadius, cutoutCenter.x + cutoutRadius, cutoutCenter.y + cutoutRadius))
+            }
+            val crescent = Path().apply {
+                op(baseCircle, cutoutCircle, PathOperation.Difference)
+            }
+            drawPath(path = crescent, color = color)
+        } else {
+            val center = Offset(size.width / 2f, size.height / 2f)
+            val centerRadius = size.minDimension * 0.22f
+            drawCircle(color = color, radius = centerRadius, center = center)
+
+            val rayCount = 8
+            val rayInner = size.minDimension * 0.34f
+            val rayOuter = size.minDimension * 0.48f
+            for (i in 0 until rayCount) {
+                val angle = (i * 45f) * (Math.PI / 180f).toFloat()
+                val start = Offset(center.x + rayInner * cos(angle), center.y + rayInner * sin(angle))
+                val end = Offset(center.x + rayOuter * cos(angle), center.y + rayOuter * sin(angle))
+                drawLine(color = color, start = start, end = end, strokeWidth = 1.6.dp.toPx(), cap = StrokeCap.Round)
             }
         }
     }
@@ -328,7 +370,6 @@ private fun InteractivePowerButton(
     onToggle: () -> Unit
 ) {
     val colors = buniColors
-    val coroutineScope = rememberCoroutineScope()
     var isPressed by remember { mutableStateOf(false) }
 
     val buttonScale by animateFloatAsState(
@@ -568,10 +609,10 @@ private fun UnifiedTelemetryCard(
                     color = colors.textMuted,
                     fontSize = 11.sp,
                     fontFamily = FontFamily.Monospace,
-                    modifier = Modifier.padding(vertical = 18.dp)
+                    modifier = Modifier.padding(vertical = 24.dp)
                 )
             } else {
-                LazyColumn(modifier = Modifier.height(140.dp)) {
+                LazyColumn(modifier = Modifier.height(260.dp)) {
                     items(displayedLogs) { logLine ->
                         val isBlockedLine = logLine.contains("SINK", ignoreCase = true) ||
                                             logLine.contains("BLOCK", ignoreCase = true) ||
