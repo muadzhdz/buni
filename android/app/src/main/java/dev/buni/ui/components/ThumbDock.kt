@@ -1,8 +1,5 @@
 package dev.buni.ui.components
 
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -22,7 +19,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -37,13 +33,13 @@ import dev.buni.theme.buniColors
 enum class NavTab {
     SHIELD,
     APPS,
-    RULES,
-    NODE
+    SETTINGS
 }
 
 @Composable
 fun ThumbDock(
-    currentTab: NavTab,
+    currentPage: Int,
+    pageOffsetFraction: Float,
     onTabSelected: (NavTab) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -59,15 +55,8 @@ fun ThumbDock(
             .padding(4.dp)
     ) {
         val tabWidth = maxWidth / tabs.size
-        val selectedIndex = currentTab.ordinal
-        val indicatorOffset by animateDpAsState(
-            targetValue = tabWidth * selectedIndex,
-            animationSpec = spring(
-                dampingRatio = Spring.DampingRatioLowBouncy,
-                stiffness = Spring.StiffnessMediumLow
-            ),
-            label = "dock_slide"
-        )
+        val continuousPosition = (currentPage + pageOffsetFraction).coerceIn(0f, (tabs.size - 1).toFloat())
+        val indicatorOffset = tabWidth * continuousPosition
 
         Box(
             modifier = Modifier
@@ -84,12 +73,11 @@ fun ThumbDock(
             horizontalArrangement = Arrangement.SpaceEvenly
         ) {
             tabs.forEach { tab ->
-                val isSelected = tab == currentTab
+                val isSelected = tab.ordinal == currentPage
                 val title = when (tab) {
                     NavTab.SHIELD -> buniString("nav_shield")
                     NavTab.APPS -> buniString("nav_apps")
-                    NavTab.RULES -> buniString("nav_rules")
-                    NavTab.NODE -> buniString("nav_node")
+                    NavTab.SETTINGS -> buniString("nav_settings")
                 }
 
                 DockItem(

@@ -1,13 +1,20 @@
 package dev.buni.ui
 
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -34,11 +41,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -47,6 +57,8 @@ import dev.buni.core.Language
 import dev.buni.core.buniString
 import dev.buni.theme.Emerald500
 import dev.buni.theme.buniColors
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 enum class EngineMode {
     SHIELD,
@@ -94,20 +106,20 @@ fun DashboardScreen(
             onModeSelect = { selectedMode = it }
         )
 
-        Spacer(modifier = Modifier.height(28.dp))
+        Spacer(modifier = Modifier.height(30.dp))
 
         Box(
             modifier = Modifier.fillMaxWidth(),
             contentAlignment = Alignment.Center
         ) {
-            MasterPowerButton(
+            InteractivePowerButton(
                 isActive = isActive,
                 mode = selectedMode,
                 onToggle = onTogglePower
             )
         }
 
-        Spacer(modifier = Modifier.height(28.dp))
+        Spacer(modifier = Modifier.height(30.dp))
 
         TelemetryStrip(
             queries = stats.first,
@@ -162,47 +174,47 @@ private fun HeaderSection(
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(
                 modifier = Modifier
-                    .clip(RoundedCornerShape(999.dp))
+                    .clip(RoundedCornerShape(8.dp))
                     .background(colors.surface)
-                    .border(1.dp, colors.border, RoundedCornerShape(999.dp))
+                    .border(1.dp, colors.border, RoundedCornerShape(8.dp))
                     .clickable(onClick = onToggleLanguage)
-                    .padding(horizontal = 10.dp, vertical = 6.dp)
+                    .padding(horizontal = 14.dp, vertical = 8.dp)
             ) {
                 Text(
                     text = if (currentLanguage == Language.EN) "EN" else "ID",
                     color = colors.textPrimary,
-                    fontSize = 11.sp,
+                    fontSize = 12.sp,
                     fontFamily = FontFamily.Monospace,
                     fontWeight = FontWeight.Bold
                 )
             }
 
-            Spacer(modifier = Modifier.width(6.dp))
+            Spacer(modifier = Modifier.width(8.dp))
 
             Box(
                 modifier = Modifier
-                    .clip(RoundedCornerShape(999.dp))
+                    .clip(RoundedCornerShape(8.dp))
                     .background(colors.surface)
-                    .border(1.dp, colors.border, RoundedCornerShape(999.dp))
+                    .border(1.dp, colors.border, RoundedCornerShape(8.dp))
                     .clickable(onClick = onToggleTheme)
-                    .padding(horizontal = 10.dp, vertical = 6.dp)
+                    .padding(horizontal = 14.dp, vertical = 8.dp)
             ) {
                 Text(
                     text = if (isDarkMode) "☾" else "☼",
                     color = colors.textPrimary,
-                    fontSize = 11.sp,
+                    fontSize = 13.sp,
                     fontWeight = FontWeight.Bold
                 )
             }
 
-            Spacer(modifier = Modifier.width(6.dp))
+            Spacer(modifier = Modifier.width(8.dp))
 
             Row(
                 modifier = Modifier
-                    .clip(RoundedCornerShape(999.dp))
+                    .clip(RoundedCornerShape(8.dp))
                     .background(colors.surface)
-                    .border(1.dp, colors.border, RoundedCornerShape(999.dp))
-                    .padding(horizontal = 10.dp, vertical = 6.dp),
+                    .border(1.dp, colors.border, RoundedCornerShape(8.dp))
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Box(
@@ -315,36 +327,106 @@ private fun ModeTab(
 }
 
 @Composable
-private fun MasterPowerButton(
+private fun InteractivePowerButton(
     isActive: Boolean,
     mode: EngineMode,
     onToggle: () -> Unit
 ) {
     val colors = buniColors
+    val coroutineScope = rememberCoroutineScope()
+    var isPressed by remember { mutableStateOf(false) }
+
+    val buttonScale by animateFloatAsState(
+        targetValue = if (isPressed) 0.90f else 1f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessMedium
+        ),
+        label = "btn_scale"
+    )
+
     val borderColor by animateColorAsState(
         targetValue = if (isActive) Emerald500 else colors.borderLight,
-        animationSpec = tween(200),
+        animationSpec = tween(250),
         label = "btn_border"
     )
 
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
+    val infiniteTransition = rememberInfiniteTransition(label = "pulse_loop")
+    val pulseScale by infiniteTransition.animateFloat(
+        initialValue = 1f,
+        targetValue = 1.38f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(2000, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "pulse_scale"
+    )
+    val pulseAlpha by infiniteTransition.animateFloat(
+        initialValue = 0.5f,
+        targetValue = 0f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(2000, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "pulse_alpha"
+    )
+
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Box(
-            modifier = Modifier
-                .size(width = 96.dp, height = 96.dp)
-                .clip(CircleShape)
-                .background(colors.surface)
-                .border(2.dp, borderColor, CircleShape)
-                .clickable(onClick = onToggle),
+            modifier = Modifier.size(130.dp),
             contentAlignment = Alignment.Center
         ) {
+            if (isActive) {
+                Box(
+                    modifier = Modifier
+                        .size(100.dp * pulseScale)
+                        .clip(CircleShape)
+                        .border(1.5.dp, Emerald500.copy(alpha = pulseAlpha), CircleShape)
+                )
+
+                Box(
+                    modifier = Modifier
+                        .size(100.dp * ((pulseScale - 1f) * 0.5f + 1f))
+                        .clip(CircleShape)
+                        .border(1.dp, Emerald500.copy(alpha = pulseAlpha * 0.7f), CircleShape)
+                )
+            }
+
             Box(
                 modifier = Modifier
-                    .size(width = 4.dp, height = 24.dp)
-                    .clip(RoundedCornerShape(2.dp))
-                    .background(if (isActive) Emerald500 else colors.textMuted)
-            )
+                    .size(100.dp)
+                    .scale(buttonScale)
+                    .clip(CircleShape)
+                    .background(colors.surface)
+                    .border(2.5.dp, borderColor, CircleShape)
+                    .pointerInput(Unit) {
+                        detectTapGestures(
+                            onPress = {
+                                isPressed = true
+                                tryAwaitRelease()
+                                isPressed = false
+                                onToggle()
+                            }
+                        )
+                    },
+                contentAlignment = Alignment.Center
+            ) {
+                if (isActive) {
+                    Box(
+                        modifier = Modifier
+                            .size(46.dp)
+                            .clip(CircleShape)
+                            .background(Emerald500.copy(alpha = 0.12f))
+                    )
+                }
+
+                Box(
+                    modifier = Modifier
+                        .size(width = 4.dp, height = 26.dp)
+                        .clip(RoundedCornerShape(2.dp))
+                        .background(if (isActive) Emerald500 else colors.textMuted)
+                )
+            }
         }
 
         Spacer(modifier = Modifier.height(14.dp))
@@ -517,7 +599,7 @@ private fun InspectionConsole(logs: List<String>) {
                 modifier = Modifier.padding(vertical = 24.dp)
             )
         } else {
-            LazyColumn(modifier = Modifier.height(180.dp)) {
+            LazyColumn(modifier = Modifier.height(270.dp)) {
                 items(displayedLogs) { logLine ->
                     val isBlockedLine = logLine.contains("SINK", ignoreCase = true) ||
                                         logLine.contains("BLOCK", ignoreCase = true) ||
