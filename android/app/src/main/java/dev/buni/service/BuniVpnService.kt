@@ -3,26 +3,40 @@ package dev.buni.service
 import android.app.Notification
 import android.app.PendingIntent
 import android.content.Intent
+import android.content.pm.ServiceInfo
 import android.net.VpnService
+import android.os.Build
 import android.os.ParcelFileDescriptor
 import androidx.core.app.NotificationCompat
 import dev.buni.BuniApp
-import dev.buni.core.Bridge
 import dev.buni.ui.MainActivity
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import java.io.FileInputStream
+import java.io.FileOutputStream
+import java.io.InputStream
+import java.net.HttpURLConnection
+import java.net.URL
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import java.util.concurrent.atomic.AtomicLong
 
 class BuniVpnService : VpnService() {
 
     private var vpnInterface: ParcelFileDescriptor? = null
-    private val serviceScope = CoroutineScope(Dispatchers.IO + Job())
+    private var serviceScope = CoroutineScope(Dispatchers.IO + Job())
+    private val blockedDomains = HashSet<String>()
+
+    private val totalQueries = AtomicLong(0)
+    private val blockedQueries = AtomicLong(0)
+    private val lastLatency = AtomicLong(0)
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val action = intent?.action ?: ACTION_CONNECT
@@ -33,37 +47,59 @@ class BuniVpnService : VpnService() {
         return START_STICKY
     }
 
+    private fun loadBlocklist() {
+        blockedDomains.clear()
+        try {
+            assets.open("blocklist.txt").bufferedReader().useLines { lines ->
+                lines.forEach { line ->
+                    val clean = line.trim().lowercase(Locale.ROOT)
+                    if (clean.isNotEmpty() && !clean.startsWith("#")) {
+                        blockedDomains.add(clean)
+                    }
+                }
+            }
+        } catch (ignored: Exception) {
+        }
+    }
+
     private fun startVpn() {
         if (vpnInterface != null) {
             return
         }
 
-        startForeground(NOTIFICATION_ID, buildNotification("Active", "Shielding network traffic"))
+        loadBlocklist()
+
+        try {
+            val notification = buildNotification("Active", "Shielding network traffic")
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                startForeground(
+                    NOTIFICATION_ID,
+                    notification,
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
+                )
+            } else {
+                startForeground(NOTIFICATION_ID, notification)
+            }
+        } catch (e: Exception) {
+        }
 
         val builder = Builder().apply {
             setSession("Buni")
             setMtu(1500)
-            addAddress("10.233.0.1", 32)
+            addAddress("10.233.0.1", 24)
             addDnsServer("10.233.0.1")
             addRoute("10.233.0.1", 32)
+            setBlocking(true)
         }
 
         try {
             vpnInterface = builder.establish()
             vpnInterface?.let { pfd ->
-                val fd = pfd.detachFd()
-                val blocklistData = try {
-                    assets.open("blocklist.txt").bufferedReader().use { it.readText() }
-                } catch (e: Exception) {
-                    ""
-                }
-                try {
-                    Bridge.startShield(fd, blocklistData, "https://cloudflare-dns.com/dns-query")
-                } catch (e: UnsatisfiedLinkError) {
-                    Bridge.mockStartShield(fd)
-                }
                 _isRunning.value = true
-                startMetricsPoller()
+                serviceScope = CoroutineScope(Dispatchers.IO + Job())
+                serviceScope.launch {
+                    runPacketLoop(pfd)
+                }
             }
         } catch (e: Exception) {
             stopVpn()
@@ -71,53 +107,328 @@ class BuniVpnService : VpnService() {
     }
 
     private fun stopVpn() {
+        serviceScope.cancel()
         try {
-            Bridge.stopShield()
-        } catch (ignored: UnsatisfiedLinkError) {
-            Bridge.mockStopShield()
+            vpnInterface?.close()
+        } catch (ignored: Exception) {
         }
-
-        serviceScope.coroutineContext.cancel()
-        vpnInterface?.close()
         vpnInterface = null
         _isRunning.value = false
 
-        stopForeground(STOP_FOREGROUND_REMOVE)
+        try {
+            stopForeground(STOP_FOREGROUND_REMOVE)
+        } catch (ignored: Exception) {
+        }
         stopSelf()
     }
 
-    private fun startMetricsPoller() {
-        serviceScope.launch {
-            while (isActive && _isRunning.value) {
-                try {
-                    val rawStats = try {
-                        Bridge.getStats()
-                    } catch (e: UnsatisfiedLinkError) {
-                        val mock = Bridge.mockGetStats()
-                        "${mock.first},${mock.second},${mock.third}"
-                    }
-                    val parts = rawStats.split(",")
-                    if (parts.size >= 3) {
-                        _statsFlow.value = Triple(
-                            parts[0].toLongOrNull() ?: 0L,
-                            parts[1].toLongOrNull() ?: 0L,
-                            parts[2].toLongOrNull() ?: 0L
-                        )
-                    }
+    private fun runPacketLoop(pfd: ParcelFileDescriptor) {
+        val inStream = FileInputStream(pfd.fileDescriptor)
+        val outStream = FileOutputStream(pfd.fileDescriptor)
+        val buffer = ByteArray(1500)
 
-                    val logLine = try {
-                        Bridge.pollLog()
-                    } catch (e: UnsatisfiedLinkError) {
-                        Bridge.mockPollLog()
-                    }
-                    if (logLine.isNotEmpty()) {
-                        _logsFlow.value = (_logsFlow.value + logLine).takeLast(50)
-                    }
-                } catch (ignored: Exception) {
+        while (serviceScope.isActive) {
+            try {
+                val length = inStream.read(buffer)
+                if (length <= 0) {
+                    continue
                 }
-                delay(1000)
+
+                if (length < 28) {
+                    continue
+                }
+
+                val version = (buffer[0].toInt() shr 4) and 0x0F
+                if (version != 4) {
+                    continue
+                }
+
+                val ihl = (buffer[0].toInt() and 0x0F) * 4
+                if (length < ihl + 8) {
+                    continue
+                }
+
+                val protocol = buffer[9].toInt() and 0xFF
+                if (protocol != 17) {
+                    continue
+                }
+
+                val dstPort = ((buffer[ihl + 2].toInt() and 0xFF) shl 8) or (buffer[ihl + 3].toInt() and 0xFF)
+                if (dstPort != 53) {
+                    continue
+                }
+
+                val udpLen = ((buffer[ihl + 4].toInt() and 0xFF) shl 8) or (buffer[ihl + 5].toInt() and 0xFF)
+                if (length < ihl + udpLen || udpLen < 8) {
+                    continue
+                }
+
+                val dnsPayload = buffer.copyOfRange(ihl + 8, ihl + udpLen)
+                val domain = parseDomainFromDns(dnsPayload)
+
+                totalQueries.incrementAndGet()
+
+                val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
+                val now = timeFormat.format(Date())
+
+                if (domain.isNotEmpty() && isDomainBlocked(domain)) {
+                    blockedQueries.incrementAndGet()
+                    val sinkReply = buildSinkholeDnsResponse(dnsPayload)
+                    if (sinkReply != null) {
+                        val replyPacket = craftIPv4UdpReply(buffer, ihl, sinkReply)
+                        outStream.write(replyPacket)
+                    }
+                    emitLog("[$now] SINK $domain -> DROPPED (0ms)")
+                } else {
+                    val start = System.currentTimeMillis()
+                    val dohReply = queryCloudflareDoh(dnsPayload)
+                    val duration = System.currentTimeMillis() - start
+                    lastLatency.set(duration)
+
+                    if (dohReply != null && dohReply.isNotEmpty()) {
+                        val replyPacket = craftIPv4UdpReply(buffer, ihl, dohReply)
+                        outStream.write(replyPacket)
+                        emitLog("[$now] DOH  $domain -> RESOLVED (${duration}ms)")
+                    } else {
+                        emitLog("[$now] DOH  $domain -> TIMEOUT")
+                    }
+                }
+
+                _statsFlow.value = Triple(
+                    totalQueries.get(),
+                    blockedQueries.get(),
+                    lastLatency.get()
+                )
+
+            } catch (e: Exception) {
+                if (!serviceScope.isActive) {
+                    break
+                }
             }
         }
+    }
+
+    private fun isDomainBlocked(domain: String): Boolean {
+        val d = domain.lowercase(Locale.ROOT)
+        if (blockedDomains.contains(d)) {
+            return true
+        }
+        var sub = d
+        while (true) {
+            val idx = sub.indexOf('.')
+            if (idx == -1) {
+                break
+            }
+            sub = sub.substring(idx + 1)
+            if (blockedDomains.contains(sub)) {
+                return true
+            }
+        }
+        return false
+    }
+
+    private fun parseDomainFromDns(wire: ByteArray): String {
+        if (wire.size < 12) {
+            return ""
+        }
+        var offset = 12
+        val labels = ArrayList<String>()
+
+        while (offset < wire.size) {
+            val len = wire[offset].toInt() and 0xFF
+            offset++
+            if (len == 0) {
+                break
+            }
+            if (len > 63 || offset + len > wire.size) {
+                return ""
+            }
+            labels.add(String(wire, offset, len, Charsets.US_ASCII))
+            offset += len
+        }
+
+        return labels.joinToString(".")
+    }
+
+    private fun queryCloudflareDoh(queryPayload: ByteArray): ByteArray? {
+        return try {
+            val url = URL("https://cloudflare-dns.com/dns-query")
+            val conn = (url.openConnection() as HttpURLConnection).apply {
+                requestMethod = "POST"
+                connectTimeout = 3000
+                readTimeout = 3000
+                doOutput = true
+                setRequestProperty("Content-Type", "application/dns-message")
+                setRequestProperty("Accept", "application/dns-message")
+            }
+            conn.outputStream.use { it.write(queryPayload) }
+
+            if (conn.responseCode == 200) {
+                conn.inputStream.use { it.readBytes() }
+            } else {
+                null
+            }
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    private fun buildSinkholeDnsResponse(query: ByteArray): ByteArray? {
+        if (query.size < 12) {
+            return null
+        }
+        var offset = 12
+        while (offset < query.size) {
+            val len = query[offset].toInt() and 0xFF
+            offset++
+            if (len == 0) {
+                break
+            }
+            offset += len
+        }
+        offset += 4
+        if (offset > query.size) {
+            return null
+        }
+
+        val resp = ByteArray(offset + 16)
+        System.arraycopy(query, 0, resp, 0, offset)
+
+        var flags = ((resp[2].toInt() and 0xFF) shl 8) or (resp[3].toInt() and 0xFF)
+        flags = flags or 0x8400
+        flags = flags and 0xFFF0.inv()
+        resp[2] = ((flags shr 8) and 0xFF).toByte()
+        resp[3] = (flags and 0xFF).toByte()
+
+        resp[4] = 0x00
+        resp[5] = 0x01
+        resp[6] = 0x00
+        resp[7] = 0x01
+        resp[8] = 0x00
+        resp[9] = 0x00
+        resp[10] = 0x00
+        resp[11] = 0x00
+
+        var idx = offset
+        resp[idx++] = 0xC0.toByte()
+        resp[idx++] = 0x0C.toByte()
+
+        resp[idx++] = 0x00.toByte()
+        resp[idx++] = 0x01.toByte()
+        resp[idx++] = 0x00.toByte()
+        resp[idx++] = 0x01.toByte()
+
+        resp[idx++] = 0x00.toByte()
+        resp[idx++] = 0x00.toByte()
+        resp[idx++] = 0x01.toByte()
+        resp[idx++] = 0x2C.toByte()
+
+        resp[idx++] = 0x00.toByte()
+        resp[idx++] = 0x04.toByte()
+
+        resp[idx++] = 0.toByte()
+        resp[idx++] = 0.toByte()
+        resp[idx++] = 0.toByte()
+        resp[idx++] = 0.toByte()
+
+        return resp
+    }
+
+    private fun craftIPv4UdpReply(req: ByteArray, ihl: Int, payload: ByteArray): ByteArray {
+        val totalLen = 20 + 8 + payload.size
+        val reply = ByteArray(totalLen)
+
+        reply[0] = 0x45.toByte()
+        reply[1] = 0x00.toByte()
+        reply[2] = ((totalLen shr 8) and 0xFF).toByte()
+        reply[3] = (totalLen and 0xFF).toByte()
+        reply[4] = 0x00.toByte()
+        reply[5] = 0x00.toByte()
+        reply[6] = 0x40.toByte()
+        reply[7] = 0x00.toByte()
+        reply[8] = 64.toByte()
+        reply[9] = 17.toByte()
+        reply[10] = 0x00.toByte()
+        reply[11] = 0x00.toByte()
+
+        System.arraycopy(req, 16, reply, 12, 4)
+        System.arraycopy(req, 12, reply, 16, 4)
+
+        val ipCsum = calculateChecksum(reply, 0, 20)
+        reply[10] = ((ipCsum shr 8) and 0xFF).toByte()
+        reply[11] = (ipCsum and 0xFF).toByte()
+
+        reply[20] = req[ihl + 2]
+        reply[21] = req[ihl + 3]
+        reply[22] = req[ihl]
+        reply[23] = req[ihl + 1]
+
+        val udpLen = 8 + payload.size
+        reply[24] = ((udpLen shr 8) and 0xFF).toByte()
+        reply[25] = (udpLen and 0xFF).toByte()
+        reply[26] = 0x00.toByte()
+        reply[27] = 0x00.toByte()
+
+        System.arraycopy(payload, 0, reply, 28, payload.size)
+
+        val udpCsum = calculateUdpChecksum(reply, 12, 16, 20, udpLen)
+        reply[26] = ((udpCsum shr 8) and 0xFF).toByte()
+        reply[27] = (udpCsum and 0xFF).toByte()
+
+        return reply
+    }
+
+    private fun calculateChecksum(data: ByteArray, offset: Int, length: Int): Int {
+        var sum = 0L
+        var i = offset
+        while (i < offset + length - 1) {
+            val word = ((data[i].toInt() and 0xFF) shl 8) or (data[i + 1].toInt() and 0xFF)
+            sum += word
+            i += 2
+        }
+        if (i < offset + length) {
+            sum += (data[i].toInt() and 0xFF) shl 8
+        }
+        while (sum shr 16 > 0) {
+            sum = (sum and 0xFFFF) + (sum shr 16)
+        }
+        return sum.inv().toInt() and 0xFFFF
+    }
+
+    private fun calculateUdpChecksum(
+        data: ByteArray,
+        srcOffset: Int,
+        dstOffset: Int,
+        udpOffset: Int,
+        udpLen: Int
+    ): Int {
+        var sum = 0L
+        sum += ((data[srcOffset].toInt() and 0xFF) shl 8) or (data[srcOffset + 1].toInt() and 0xFF)
+        sum += ((data[srcOffset + 2].toInt() and 0xFF) shl 8) or (data[srcOffset + 3].toInt() and 0xFF)
+        sum += ((data[dstOffset].toInt() and 0xFF) shl 8) or (data[dstOffset + 1].toInt() and 0xFF)
+        sum += ((data[dstOffset + 2].toInt() and 0xFF) shl 8) or (data[dstOffset + 3].toInt() and 0xFF)
+        sum += 17L
+        sum += udpLen.toLong()
+
+        var i = udpOffset
+        while (i < udpOffset + udpLen - 1) {
+            val word = ((data[i].toInt() and 0xFF) shl 8) or (data[i + 1].toInt() and 0xFF)
+            sum += word
+            i += 2
+        }
+        if (i < udpOffset + udpLen) {
+            sum += (data[i].toInt() and 0xFF) shl 8
+        }
+        while (sum shr 16 > 0) {
+            sum = (sum and 0xFFFF) + (sum shr 16)
+        }
+        val res = sum.inv().toInt() and 0xFFFF
+        return if (res == 0) 0xFFFF else res
+    }
+
+    private fun emitLog(line: String) {
+        val current = _logsFlow.value
+        _logsFlow.value = (current + line).takeLast(50)
     }
 
     private fun buildNotification(title: String, message: String): Notification {
