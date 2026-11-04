@@ -4,7 +4,7 @@ object Bridge {
 
     init {
         try {
-            System.loadLibrary("bunipy")
+            System.loadLibrary("buni")
         } catch (ignored: UnsatisfiedLinkError) {
         }
     }

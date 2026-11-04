@@ -1,4 +1,4 @@
-.PHONY: all test test-verbose fmt clean build-core
+.PHONY: all test test-verbose fmt clean build-core build-android
 
 all: test build-core
 
@@ -13,6 +13,9 @@ fmt:
 
 build-core:
 	cd core && go build -v ./...
+
+build-android:
+	cd android && ./gradlew assembleDebug
 
 clean:
 	cd core && go clean

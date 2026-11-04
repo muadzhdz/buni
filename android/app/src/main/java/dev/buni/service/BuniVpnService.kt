@@ -52,8 +52,13 @@ class BuniVpnService : VpnService() {
             vpnInterface = builder.establish()
             vpnInterface?.let { pfd ->
                 val fd = pfd.detachFd()
+                val blocklistData = try {
+                    assets.open("blocklist.txt").bufferedReader().use { it.readText() }
+                } catch (e: Exception) {
+                    ""
+                }
                 try {
-                    Bridge.startShield(fd, "", "https://cloudflare-dns.com/dns-query")
+                    Bridge.startShield(fd, blocklistData, "https://cloudflare-dns.com/dns-query")
                 } catch (e: UnsatisfiedLinkError) {
                     Bridge.mockStartShield(fd)
                 }
