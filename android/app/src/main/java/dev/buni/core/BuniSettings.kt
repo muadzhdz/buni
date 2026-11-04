@@ -60,6 +60,23 @@ class BuniSettings(context: Context) {
         prefs.edit().putBoolean(KEY_FILTER_MALWARE, enabled).apply()
     }
 
+    fun isDarkMode(): Boolean {
+        return prefs.getBoolean(KEY_DARK_MODE, true)
+    }
+
+    fun setDarkMode(isDark: Boolean) {
+        prefs.edit().putBoolean(KEY_DARK_MODE, isDark).apply()
+    }
+
+    fun getLanguage(): Language {
+        val langStr = prefs.getString(KEY_LANGUAGE, "EN") ?: "EN"
+        return if (langStr == "ID") Language.ID else Language.EN
+    }
+
+    fun setLanguage(lang: Language) {
+        prefs.edit().putString(KEY_LANGUAGE, lang.name).apply()
+    }
+
     fun getWireGuardEndpoint(): String {
         return prefs.getString(KEY_WG_ENDPOINT, "") ?: ""
     }
@@ -85,5 +102,7 @@ class BuniSettings(context: Context) {
         private const val KEY_FILTER_MALWARE = "pref_filter_malware"
         private const val KEY_WG_ENDPOINT = "pref_wg_endpoint"
         private const val KEY_WG_PUBKEY = "pref_wg_pubkey"
+        private const val KEY_DARK_MODE = "pref_dark_mode"
+        private const val KEY_LANGUAGE = "pref_language"
     }
 }

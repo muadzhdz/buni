@@ -17,7 +17,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import dev.buni.theme.Black
+import dev.buni.core.Language
+import dev.buni.theme.buniColors
 import dev.buni.ui.components.NavTab
 import dev.buni.ui.components.ThumbDock
 
@@ -26,14 +27,19 @@ fun AppShell(
     isActive: Boolean,
     stats: Triple<Long, Long, Long>,
     logs: List<String>,
+    isDarkMode: Boolean,
+    currentLanguage: Language,
+    onToggleTheme: () -> Unit,
+    onToggleLanguage: () -> Unit,
     onTogglePower: () -> Unit
 ) {
     var currentTab by remember { mutableStateOf(NavTab.SHIELD) }
+    val colors = buniColors
 
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Black)
+            .background(colors.background)
     ) {
         AnimatedContent(
             targetState = currentTab,
@@ -48,10 +54,19 @@ fun AppShell(
                     isActive = isActive,
                     stats = stats,
                     logs = logs,
+                    isDarkMode = isDarkMode,
+                    currentLanguage = currentLanguage,
+                    onToggleTheme = onToggleTheme,
+                    onToggleLanguage = onToggleLanguage,
                     onTogglePower = onTogglePower
                 )
                 NavTab.APPS -> AppsScreen()
-                NavTab.RULES -> RulesScreen()
+                NavTab.RULES -> RulesScreen(
+                    isDarkMode = isDarkMode,
+                    currentLanguage = currentLanguage,
+                    onToggleTheme = onToggleTheme,
+                    onToggleLanguage = onToggleLanguage
+                )
                 NavTab.NODE -> NodeScreen()
             }
         }

@@ -11,8 +11,15 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import dev.buni.core.BuniSettings
+import dev.buni.core.Language
+import dev.buni.core.LocalBuniLanguage
 import dev.buni.service.BuniVpnService
 import dev.buni.theme.BuniTheme
 
@@ -36,24 +43,43 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        setContent {
-            BuniTheme {
-                val isRunning by BuniVpnService.isRunning.collectAsState()
-                val stats by BuniVpnService.statsFlow.collectAsState()
-                val logs by BuniVpnService.logsFlow.collectAsState()
+        val settings = BuniSettings(this)
 
-                AppShell(
-                    isActive = isRunning,
-                    stats = stats,
-                    logs = logs,
-                    onTogglePower = {
-                        if (isRunning) {
-                            stopVpnService()
-                        } else {
-                            prepareAndStartVpn()
+        setContent {
+            var isDarkMode by remember { mutableStateOf(settings.isDarkMode()) }
+            var currentLanguage by remember { mutableStateOf(settings.getLanguage()) }
+
+            CompositionLocalProvider(LocalBuniLanguage provides currentLanguage) {
+                BuniTheme(darkTheme = isDarkMode) {
+                    val isRunning by BuniVpnService.isRunning.collectAsState()
+                    val stats by BuniVpnService.statsFlow.collectAsState()
+                    val logs by BuniVpnService.logsFlow.collectAsState()
+
+                    AppShell(
+                        isActive = isRunning,
+                        stats = stats,
+                        logs = logs,
+                        isDarkMode = isDarkMode,
+                        currentLanguage = currentLanguage,
+                        onToggleTheme = {
+                            val newMode = !isDarkMode
+                            settings.setDarkMode(newMode)
+                            isDarkMode = newMode
+                        },
+                        onToggleLanguage = {
+                            val newLang = if (currentLanguage == Language.EN) Language.ID else Language.EN
+                            settings.setLanguage(newLang)
+                            currentLanguage = newLang
+                        },
+                        onTogglePower = {
+                            if (isRunning) {
+                                stopVpnService()
+                            } else {
+                                prepareAndStartVpn()
+                            }
                         }
-                    }
-                )
+                    )
+                }
             }
         }
     }

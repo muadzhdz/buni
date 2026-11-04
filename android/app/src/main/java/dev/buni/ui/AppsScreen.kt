@@ -1,7 +1,6 @@
 package dev.buni.ui
 
 import android.content.Intent
-import android.content.pm.PackageManager
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -14,12 +13,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -39,16 +36,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.buni.core.BuniSettings
-import dev.buni.theme.Black
+import dev.buni.core.buniString
 import dev.buni.theme.Emerald500
-import dev.buni.theme.White
-import dev.buni.theme.Zinc400
-import dev.buni.theme.Zinc500
-import dev.buni.theme.Zinc600
-import dev.buni.theme.Zinc700
-import dev.buni.theme.Zinc800
-import dev.buni.theme.Zinc900
-import dev.buni.theme.Zinc950
+import dev.buni.theme.buniColors
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -62,6 +52,7 @@ data class InstalledAppInfo(
 fun AppsScreen() {
     val context = LocalContext.current
     val settings = remember { BuniSettings(context) }
+    val colors = buniColors
 
     var searchQuery by remember { mutableStateOf("") }
     var appsList by remember { mutableStateOf<List<InstalledAppInfo>>(emptyList()) }
@@ -103,20 +94,20 @@ fun AppsScreen() {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Black)
+            .background(colors.background)
             .statusBarsPadding()
             .padding(horizontal = 20.dp, vertical = 20.dp)
     ) {
         Text(
-            text = "split-tunneling",
-            color = White,
+            text = buniString("split_tunneling"),
+            color = colors.textPrimary,
             fontSize = 24.sp,
             fontWeight = FontWeight.Bold,
             letterSpacing = 2.sp
         )
         Text(
-            text = "bypass apps from vpn interface directly to cellular/wi-fi",
-            color = Zinc500,
+            text = buniString("split_sub"),
+            color = colors.textMuted,
             fontSize = 12.sp
         )
 
@@ -125,16 +116,16 @@ fun AppsScreen() {
         OutlinedTextField(
             value = searchQuery,
             onValueChange = { searchQuery = it },
-            placeholder = { Text("search apps...", color = Zinc600, fontSize = 13.sp) },
+            placeholder = { Text(buniString("search_apps"), color = colors.textMuted, fontSize = 13.sp) },
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),
             colors = OutlinedTextFieldDefaults.colors(
-                focusedContainerColor = Zinc950,
-                unfocusedContainerColor = Zinc950,
-                focusedBorderColor = Zinc600,
-                unfocusedBorderColor = Zinc800,
-                focusedTextColor = White,
-                unfocusedTextColor = White
+                focusedContainerColor = colors.surface,
+                unfocusedContainerColor = colors.surface,
+                focusedBorderColor = colors.borderLight,
+                unfocusedBorderColor = colors.border,
+                focusedTextColor = colors.textPrimary,
+                unfocusedTextColor = colors.textPrimary
             ),
             shape = RoundedCornerShape(8.dp)
         )
@@ -145,22 +136,22 @@ fun AppsScreen() {
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(8.dp))
-                .background(Zinc950)
-                .border(1.dp, Zinc800, RoundedCornerShape(8.dp))
+                .background(colors.surface)
+                .border(1.dp, colors.border, RoundedCornerShape(8.dp))
                 .padding(horizontal = 14.dp, vertical = 10.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = "BYPASSED APPS",
-                color = Zinc500,
+                text = buniString("bypassed_apps"),
+                color = colors.textMuted,
                 fontSize = 10.sp,
                 fontFamily = FontFamily.Monospace,
                 letterSpacing = 1.sp
             )
             Text(
                 text = "${appsList.count { it.isBypassed }} / ${appsList.size}",
-                color = White,
+                color = colors.textPrimary,
                 fontSize = 12.sp,
                 fontFamily = FontFamily.Monospace,
                 fontWeight = FontWeight.Bold
@@ -177,8 +168,8 @@ fun AppsScreen() {
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = "> reading installed packages...",
-                    color = Zinc600,
+                    text = buniString("reading_packages"),
+                    color = colors.textMuted,
                     fontSize = 11.sp,
                     fontFamily = FontFamily.Monospace
                 )
@@ -214,12 +205,14 @@ private fun AppRowItem(
     app: InstalledAppInfo,
     onToggle: () -> Unit
 ) {
+    val colors = buniColors
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(8.dp))
-            .background(Zinc950)
-            .border(1.dp, if (app.isBypassed) Zinc700 else Zinc900, RoundedCornerShape(8.dp))
+            .background(colors.surface)
+            .border(1.dp, if (app.isBypassed) colors.borderLight else colors.border, RoundedCornerShape(8.dp))
             .clickable(onClick = onToggle)
             .padding(horizontal = 14.dp, vertical = 12.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
@@ -228,13 +221,13 @@ private fun AppRowItem(
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = app.name,
-                color = White,
+                color = colors.textPrimary,
                 fontSize = 13.sp,
                 fontWeight = FontWeight.SemiBold
             )
             Text(
                 text = app.packageName,
-                color = Zinc600,
+                color = colors.textMuted,
                 fontSize = 10.sp,
                 fontFamily = FontFamily.Monospace,
                 maxLines = 1
@@ -246,13 +239,13 @@ private fun AppRowItem(
         Box(
             modifier = Modifier
                 .clip(RoundedCornerShape(6.dp))
-                .background(if (app.isBypassed) Zinc800 else Zinc900)
-                .border(1.dp, if (app.isBypassed) Emerald500 else Zinc800, RoundedCornerShape(6.dp))
+                .background(if (app.isBypassed) colors.surfaceVariant else colors.surface)
+                .border(1.dp, if (app.isBypassed) Emerald500 else colors.border, RoundedCornerShape(6.dp))
                 .padding(horizontal = 10.dp, vertical = 6.dp)
         ) {
             Text(
-                text = if (app.isBypassed) "BYPASS" else "SHIELD",
-                color = if (app.isBypassed) Emerald500 else Zinc500,
+                text = if (app.isBypassed) buniString("bypass") else buniString("shield"),
+                color = if (app.isBypassed) Emerald500 else colors.textMuted,
                 fontSize = 10.sp,
                 fontFamily = FontFamily.Monospace,
                 fontWeight = FontWeight.Bold,

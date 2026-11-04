@@ -43,16 +43,10 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import dev.buni.theme.Black
+import dev.buni.core.Language
+import dev.buni.core.buniString
 import dev.buni.theme.Emerald500
-import dev.buni.theme.White
-import dev.buni.theme.Zinc400
-import dev.buni.theme.Zinc500
-import dev.buni.theme.Zinc600
-import dev.buni.theme.Zinc700
-import dev.buni.theme.Zinc800
-import dev.buni.theme.Zinc900
-import dev.buni.theme.Zinc950
+import dev.buni.theme.buniColors
 
 enum class EngineMode {
     SHIELD,
@@ -64,21 +58,34 @@ fun DashboardScreen(
     isActive: Boolean,
     stats: Triple<Long, Long, Long>,
     logs: List<String>,
+    isDarkMode: Boolean,
+    currentLanguage: Language,
+    onToggleTheme: () -> Unit,
+    onToggleLanguage: () -> Unit,
     onTogglePower: () -> Unit
 ) {
     var selectedMode by remember { mutableStateOf(EngineMode.SHIELD) }
     val scrollState = rememberScrollState()
+    val colors = buniColors
 
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Black)
+            .background(colors.background)
             .statusBarsPadding()
             .navigationBarsPadding()
             .verticalScroll(scrollState)
             .padding(horizontal = 20.dp, vertical = 20.dp)
     ) {
-        HeaderSection(isActive = isActive, latencyMs = stats.third, mode = selectedMode)
+        HeaderSection(
+            isActive = isActive,
+            latencyMs = stats.third,
+            mode = selectedMode,
+            isDarkMode = isDarkMode,
+            currentLanguage = currentLanguage,
+            onToggleTheme = onToggleTheme,
+            onToggleLanguage = onToggleLanguage
+        )
 
         Spacer(modifier = Modifier.height(24.dp))
 
@@ -87,7 +94,7 @@ fun DashboardScreen(
             onModeSelect = { selectedMode = it }
         )
 
-        Spacer(modifier = Modifier.height(32.dp))
+        Spacer(modifier = Modifier.height(28.dp))
 
         Box(
             modifier = Modifier.fillMaxWidth(),
@@ -100,7 +107,7 @@ fun DashboardScreen(
             )
         }
 
-        Spacer(modifier = Modifier.height(32.dp))
+        Spacer(modifier = Modifier.height(28.dp))
 
         TelemetryStrip(
             queries = stats.first,
@@ -108,16 +115,26 @@ fun DashboardScreen(
             latency = stats.third
         )
 
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(20.dp))
 
         InspectionConsole(logs = logs)
 
-        Spacer(modifier = Modifier.height(90.dp))
+        Spacer(modifier = Modifier.height(80.dp))
     }
 }
 
 @Composable
-private fun HeaderSection(isActive: Boolean, latencyMs: Long, mode: EngineMode) {
+private fun HeaderSection(
+    isActive: Boolean,
+    latencyMs: Long,
+    mode: EngineMode,
+    isDarkMode: Boolean,
+    currentLanguage: Language,
+    onToggleTheme: () -> Unit,
+    onToggleLanguage: () -> Unit
+) {
+    val colors = buniColors
+
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
@@ -126,40 +143,83 @@ private fun HeaderSection(isActive: Boolean, latencyMs: Long, mode: EngineMode) 
         Column {
             Text(
                 text = "buni",
-                color = White,
+                color = colors.textPrimary,
                 fontSize = 24.sp,
                 fontWeight = FontWeight.Bold,
                 letterSpacing = 2.sp
             )
             Text(
-                text = if (mode == EngineMode.SHIELD) "the hidden network shield" else "wireguard privacy tunnel",
-                color = Zinc500,
+                text = if (mode == EngineMode.SHIELD) {
+                    buniString("app_tagline")
+                } else {
+                    buniString("tunnel_tagline")
+                },
+                color = colors.textMuted,
                 fontSize = 12.sp
             )
         }
 
-        Row(
-            modifier = Modifier
-                .clip(RoundedCornerShape(999.dp))
-                .background(Zinc950)
-                .border(1.dp, Zinc800, RoundedCornerShape(999.dp))
-                .padding(horizontal = 12.dp, vertical = 6.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
             Box(
                 modifier = Modifier
-                    .size(6.dp)
-                    .clip(CircleShape)
-                    .background(if (isActive) Emerald500 else Zinc600)
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            Text(
-                text = if (isActive) "${latencyMs}ms" else "STANDBY",
-                color = if (isActive) White else Zinc500,
-                fontSize = 11.sp,
-                fontFamily = FontFamily.Monospace,
-                fontWeight = FontWeight.SemiBold
-            )
+                    .clip(RoundedCornerShape(999.dp))
+                    .background(colors.surface)
+                    .border(1.dp, colors.border, RoundedCornerShape(999.dp))
+                    .clickable(onClick = onToggleLanguage)
+                    .padding(horizontal = 10.dp, vertical = 6.dp)
+            ) {
+                Text(
+                    text = if (currentLanguage == Language.EN) "EN" else "ID",
+                    color = colors.textPrimary,
+                    fontSize = 11.sp,
+                    fontFamily = FontFamily.Monospace,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+
+            Spacer(modifier = Modifier.width(6.dp))
+
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(999.dp))
+                    .background(colors.surface)
+                    .border(1.dp, colors.border, RoundedCornerShape(999.dp))
+                    .clickable(onClick = onToggleTheme)
+                    .padding(horizontal = 10.dp, vertical = 6.dp)
+            ) {
+                Text(
+                    text = if (isDarkMode) "☾" else "☼",
+                    color = colors.textPrimary,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+
+            Spacer(modifier = Modifier.width(6.dp))
+
+            Row(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(999.dp))
+                    .background(colors.surface)
+                    .border(1.dp, colors.border, RoundedCornerShape(999.dp))
+                    .padding(horizontal = 10.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(6.dp)
+                        .clip(CircleShape)
+                        .background(if (isActive) Emerald500 else colors.textMuted)
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = if (isActive) "${latencyMs}ms" else buniString("standby"),
+                    color = if (isActive) colors.textPrimary else colors.textMuted,
+                    fontSize = 11.sp,
+                    fontFamily = FontFamily.Monospace,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
         }
     }
 }
@@ -169,12 +229,14 @@ private fun SlidingModeSelector(
     currentMode: EngineMode,
     onModeSelect: (EngineMode) -> Unit
 ) {
+    val colors = buniColors
+
     BoxWithConstraints(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(10.dp))
-            .background(Zinc950)
-            .border(1.dp, Zinc800, RoundedCornerShape(10.dp))
+            .background(colors.surface)
+            .border(1.dp, colors.border, RoundedCornerShape(10.dp))
             .padding(4.dp)
     ) {
         val tabWidth = maxWidth / 2
@@ -195,21 +257,21 @@ private fun SlidingModeSelector(
                 .width(tabWidth)
                 .height(48.dp)
                 .clip(RoundedCornerShape(8.dp))
-                .background(Zinc800)
-                .border(1.dp, Zinc700, RoundedCornerShape(8.dp))
+                .background(colors.surfaceVariant)
+                .border(1.dp, colors.borderLight, RoundedCornerShape(8.dp))
         )
 
         Row(modifier = Modifier.fillMaxWidth()) {
             ModeTab(
-                title = "SHIELD",
-                subtitle = "Local Zero-Latency",
+                title = buniString("shield_tab"),
+                subtitle = buniString("shield_sub"),
                 selected = currentMode == EngineMode.SHIELD,
                 onClick = { onModeSelect(EngineMode.SHIELD) },
                 modifier = Modifier.weight(1f)
             )
             ModeTab(
-                title = "TUNNEL",
-                subtitle = "WireGuard Node",
+                title = buniString("tunnel_tab"),
+                subtitle = buniString("tunnel_sub"),
                 selected = currentMode == EngineMode.TUNNEL,
                 onClick = { onModeSelect(EngineMode.TUNNEL) },
                 modifier = Modifier.weight(1f)
@@ -226,26 +288,27 @@ private fun ModeTab(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val colors = buniColors
+
     Column(
         modifier = modifier
             .height(48.dp)
             .clip(RoundedCornerShape(8.dp))
             .background(Color.Transparent)
-            .clickable(onClick = onClick)
-            .padding(vertical = 6.dp),
+            .clickable(onClick = onClick),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
         Text(
             text = title,
-            color = if (selected) White else Zinc500,
+            color = if (selected) colors.textPrimary else colors.textMuted,
             fontSize = 12.sp,
             fontWeight = FontWeight.Bold,
             letterSpacing = 1.sp
         )
         Text(
             text = subtitle,
-            color = if (selected) Zinc400 else Zinc600,
+            color = if (selected) colors.textSecondary else colors.textMuted,
             fontSize = 10.sp
         )
     }
@@ -257,8 +320,9 @@ private fun MasterPowerButton(
     mode: EngineMode,
     onToggle: () -> Unit
 ) {
+    val colors = buniColors
     val borderColor by animateColorAsState(
-        targetValue = if (isActive) Emerald500 else Zinc700,
+        targetValue = if (isActive) Emerald500 else colors.borderLight,
         animationSpec = tween(200),
         label = "btn_border"
     )
@@ -270,7 +334,7 @@ private fun MasterPowerButton(
             modifier = Modifier
                 .size(width = 96.dp, height = 96.dp)
                 .clip(CircleShape)
-                .background(Zinc950)
+                .background(colors.surface)
                 .border(2.dp, borderColor, CircleShape)
                 .clickable(onClick = onToggle),
             contentAlignment = Alignment.Center
@@ -279,7 +343,7 @@ private fun MasterPowerButton(
                 modifier = Modifier
                     .size(width = 4.dp, height = 24.dp)
                     .clip(RoundedCornerShape(2.dp))
-                    .background(if (isActive) Emerald500 else Zinc600)
+                    .background(if (isActive) Emerald500 else colors.textMuted)
             )
         }
 
@@ -287,11 +351,11 @@ private fun MasterPowerButton(
 
         Text(
             text = if (isActive) {
-                if (mode == EngineMode.SHIELD) "SHIELD ENGAGED" else "TUNNEL ENGAGED"
+                if (mode == EngineMode.SHIELD) buniString("shield_engaged") else buniString("tunnel_engaged")
             } else {
-                if (mode == EngineMode.SHIELD) "TAP TO SHIELD" else "TAP TO TUNNEL"
+                if (mode == EngineMode.SHIELD) buniString("tap_to_shield") else buniString("tap_to_tunnel")
             },
-            color = if (isActive) White else Zinc500,
+            color = if (isActive) colors.textPrimary else colors.textMuted,
             fontSize = 11.sp,
             fontFamily = FontFamily.Monospace,
             letterSpacing = 1.sp
@@ -301,11 +365,11 @@ private fun MasterPowerButton(
 
         Text(
             text = if (mode == EngineMode.SHIELD) {
-                "Direct WAN · Local DNS Sinkhole · Cloudflare"
+                buniString("shield_desc")
             } else {
-                "Encrypted Uplink · Remote WireGuard Node"
+                buniString("tunnel_desc")
             },
-            color = Zinc600,
+            color = colors.textMuted,
             fontSize = 10.sp,
             fontFamily = FontFamily.Monospace
         )
@@ -318,27 +382,31 @@ private fun TelemetryStrip(
     blocked: Long,
     latency: Long
 ) {
+    val colors = buniColors
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(8.dp))
-            .background(Zinc950)
-            .border(1.dp, Zinc800, RoundedCornerShape(8.dp))
+            .background(colors.surface)
+            .border(1.dp, colors.border, RoundedCornerShape(8.dp))
             .padding(vertical = 14.dp, horizontal = 16.dp),
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
-        StatItem(label = "QUERIES", value = queries.toString())
-        StatItem(label = "BLOCKED", value = blocked.toString())
-        StatItem(label = "LATENCY", value = "${latency}ms")
+        StatItem(label = buniString("queries"), value = queries.toString())
+        StatItem(label = buniString("blocked"), value = blocked.toString())
+        StatItem(label = buniString("latency"), value = "${latency}ms")
     }
 }
 
 @Composable
 private fun StatItem(label: String, value: String) {
+    val colors = buniColors
+
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Text(
             text = label,
-            color = Zinc500,
+            color = colors.textMuted,
             fontSize = 10.sp,
             fontFamily = FontFamily.Monospace,
             letterSpacing = 1.sp
@@ -346,7 +414,7 @@ private fun StatItem(label: String, value: String) {
         Spacer(modifier = Modifier.height(4.dp))
         Text(
             text = value,
-            color = White,
+            color = colors.textPrimary,
             fontSize = 16.sp,
             fontFamily = FontFamily.Monospace,
             fontWeight = FontWeight.Bold
@@ -356,49 +424,107 @@ private fun StatItem(label: String, value: String) {
 
 @Composable
 private fun InspectionConsole(logs: List<String>) {
+    val colors = buniColors
+    var filterBlockedOnly by remember { mutableStateOf(false) }
+
+    val displayedLogs = remember(logs, filterBlockedOnly) {
+        if (filterBlockedOnly) {
+            logs.filter {
+                it.contains("SINK", ignoreCase = true) ||
+                it.contains("BLOCK", ignoreCase = true) ||
+                it.contains("DROP", ignoreCase = true)
+            }
+        } else {
+            logs
+        }
+    }
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(8.dp))
-            .background(Zinc950)
-            .border(1.dp, Zinc800, RoundedCornerShape(8.dp))
+            .background(colors.surface)
+            .border(1.dp, colors.border, RoundedCornerShape(8.dp))
             .padding(12.dp)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = "LIVE INSPECTION",
-                color = Zinc500,
+                text = buniString("live_inspection"),
+                color = colors.textMuted,
                 fontSize = 10.sp,
                 fontFamily = FontFamily.Monospace,
                 letterSpacing = 1.sp
             )
-            Text(
-                text = "${logs.size} EVENTS",
-                color = Zinc600,
-                fontSize = 10.sp,
-                fontFamily = FontFamily.Monospace
-            )
+
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(if (!filterBlockedOnly) colors.surfaceVariant else Color.Transparent)
+                        .clickable { filterBlockedOnly = false }
+                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                ) {
+                    Text(
+                        text = buniString("all"),
+                        color = if (!filterBlockedOnly) colors.textPrimary else colors.textMuted,
+                        fontSize = 9.sp,
+                        fontFamily = FontFamily.Monospace,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(4.dp))
+
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(if (filterBlockedOnly) colors.surfaceVariant else Color.Transparent)
+                        .clickable { filterBlockedOnly = true }
+                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                ) {
+                    Text(
+                        text = buniString("blocked"),
+                        color = if (filterBlockedOnly) Emerald500 else colors.textMuted,
+                        fontSize = 9.sp,
+                        fontFamily = FontFamily.Monospace,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(6.dp))
+
+                Text(
+                    text = "${displayedLogs.size} ${buniString("events")}",
+                    color = colors.textMuted,
+                    fontSize = 9.sp,
+                    fontFamily = FontFamily.Monospace
+                )
+            }
         }
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        if (logs.isEmpty()) {
+        if (displayedLogs.isEmpty()) {
             Text(
-                text = "> awaiting packet stream...",
-                color = Zinc600,
+                text = if (filterBlockedOnly) "> no blocked queries recorded yet" else buniString("awaiting_packets"),
+                color = colors.textMuted,
                 fontSize = 11.sp,
                 fontFamily = FontFamily.Monospace,
-                modifier = Modifier.padding(vertical = 16.dp)
+                modifier = Modifier.padding(vertical = 24.dp)
             )
         } else {
-            LazyColumn(modifier = Modifier.height(140.dp)) {
-                items(logs) { logLine ->
+            LazyColumn(modifier = Modifier.height(180.dp)) {
+                items(displayedLogs) { logLine ->
+                    val isBlockedLine = logLine.contains("SINK", ignoreCase = true) ||
+                                        logLine.contains("BLOCK", ignoreCase = true) ||
+                                        logLine.contains("DROP", ignoreCase = true)
                     Text(
                         text = "> $logLine",
-                        color = Zinc400,
+                        color = if (isBlockedLine) Emerald500 else colors.textSecondary,
                         fontSize = 10.sp,
                         fontFamily = FontFamily.Monospace,
                         maxLines = 1

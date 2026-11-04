@@ -31,19 +31,14 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import dev.buni.theme.Emerald500
-import dev.buni.theme.White
-import dev.buni.theme.Zinc400
-import dev.buni.theme.Zinc600
-import dev.buni.theme.Zinc700
-import dev.buni.theme.Zinc800
-import dev.buni.theme.Zinc950
+import dev.buni.core.buniString
+import dev.buni.theme.buniColors
 
-enum class NavTab(val title: String) {
-    SHIELD("SHIELD"),
-    APPS("APPS"),
-    RULES("RULES"),
-    NODE("NODE")
+enum class NavTab {
+    SHIELD,
+    APPS,
+    RULES,
+    NODE
 }
 
 @Composable
@@ -53,13 +48,14 @@ fun ThumbDock(
     modifier: Modifier = Modifier
 ) {
     val tabs = NavTab.values()
+    val colors = buniColors
 
     BoxWithConstraints(
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(999.dp))
-            .background(Zinc950)
-            .border(1.dp, Zinc800, RoundedCornerShape(999.dp))
+            .background(colors.surface)
+            .border(1.dp, colors.border, RoundedCornerShape(999.dp))
             .padding(4.dp)
     ) {
         val tabWidth = maxWidth / tabs.size
@@ -79,8 +75,8 @@ fun ThumbDock(
                 .width(tabWidth)
                 .height(44.dp)
                 .clip(RoundedCornerShape(999.dp))
-                .background(Zinc800)
-                .border(1.dp, Zinc700, RoundedCornerShape(999.dp))
+                .background(colors.surfaceVariant)
+                .border(1.dp, colors.borderLight, RoundedCornerShape(999.dp))
         )
 
         Row(
@@ -89,8 +85,15 @@ fun ThumbDock(
         ) {
             tabs.forEach { tab ->
                 val isSelected = tab == currentTab
+                val title = when (tab) {
+                    NavTab.SHIELD -> buniString("nav_shield")
+                    NavTab.APPS -> buniString("nav_apps")
+                    NavTab.RULES -> buniString("nav_rules")
+                    NavTab.NODE -> buniString("nav_node")
+                }
+
                 DockItem(
-                    tab = tab,
+                    title = title,
                     isSelected = isSelected,
                     onClick = { onTabSelected(tab) },
                     modifier = Modifier.weight(1f)
@@ -102,11 +105,13 @@ fun ThumbDock(
 
 @Composable
 private fun DockItem(
-    tab: NavTab,
+    title: String,
     isSelected: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val colors = buniColors
+
     Column(
         modifier = modifier
             .height(44.dp)
@@ -122,13 +127,13 @@ private fun DockItem(
                     modifier = Modifier
                         .size(4.dp)
                         .clip(CircleShape)
-                        .background(Emerald500)
+                        .background(colors.accent)
                 )
                 Spacer(modifier = Modifier.width(6.dp))
             }
             Text(
-                text = tab.title,
-                color = if (isSelected) White else Zinc400,
+                text = title,
+                color = if (isSelected) colors.textPrimary else colors.textMuted,
                 fontSize = 11.sp,
                 fontFamily = FontFamily.Monospace,
                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,

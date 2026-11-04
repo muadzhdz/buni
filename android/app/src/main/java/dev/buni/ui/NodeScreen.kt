@@ -35,22 +35,16 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.buni.core.BuniSettings
-import dev.buni.theme.Black
+import dev.buni.core.buniString
 import dev.buni.theme.Emerald500
-import dev.buni.theme.White
-import dev.buni.theme.Zinc400
-import dev.buni.theme.Zinc500
-import dev.buni.theme.Zinc600
-import dev.buni.theme.Zinc700
-import dev.buni.theme.Zinc800
-import dev.buni.theme.Zinc900
-import dev.buni.theme.Zinc950
+import dev.buni.theme.buniColors
 
 @Composable
 fun NodeScreen() {
     val context = LocalContext.current
     val settings = remember { BuniSettings(context) }
     val scrollState = rememberScrollState()
+    val colors = buniColors
 
     var endpoint by remember { mutableStateOf(settings.getWireGuardEndpoint()) }
     var publicKey by remember { mutableStateOf(settings.getWireGuardPublicKey()) }
@@ -58,21 +52,21 @@ fun NodeScreen() {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Black)
+            .background(colors.background)
             .statusBarsPadding()
             .verticalScroll(scrollState)
             .padding(horizontal = 20.dp, vertical = 20.dp)
     ) {
         Text(
-            text = "remote node",
-            color = White,
+            text = buniString("remote_node"),
+            color = colors.textPrimary,
             fontSize = 24.sp,
             fontWeight = FontWeight.Bold,
             letterSpacing = 2.sp
         )
         Text(
-            text = "wireguard full encrypted tunnel uplink",
-            color = Zinc500,
+            text = buniString("remote_node_sub"),
+            color = colors.textMuted,
             fontSize = 12.sp
         )
 
@@ -82,16 +76,16 @@ fun NodeScreen() {
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(8.dp))
-                .background(Zinc950)
-                .border(1.dp, Zinc800, RoundedCornerShape(8.dp))
+                .background(colors.surface)
+                .border(1.dp, colors.border, RoundedCornerShape(8.dp))
                 .padding(horizontal = 16.dp, vertical = 14.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column {
                 Text(
-                    text = "PROTOCOL",
-                    color = Zinc500,
+                    text = buniString("protocol"),
+                    color = colors.textMuted,
                     fontSize = 10.sp,
                     fontFamily = FontFamily.Monospace,
                     letterSpacing = 1.sp
@@ -99,7 +93,7 @@ fun NodeScreen() {
                 Spacer(modifier = Modifier.height(2.dp))
                 Text(
                     text = "WireGuard / ChaCha20",
-                    color = White,
+                    color = colors.textPrimary,
                     fontSize = 13.sp,
                     fontWeight = FontWeight.SemiBold
                 )
@@ -110,12 +104,12 @@ fun NodeScreen() {
                     modifier = Modifier
                         .size(6.dp)
                         .clip(CircleShape)
-                        .background(if (endpoint.isNotEmpty()) Emerald500 else Zinc600)
+                        .background(if (endpoint.isNotEmpty()) Emerald500 else colors.textMuted)
                 )
                 Spacer(modifier = Modifier.width(6.dp))
                 Text(
                     text = if (endpoint.isNotEmpty()) "READY" else "UNCONFIGURED",
-                    color = if (endpoint.isNotEmpty()) White else Zinc500,
+                    color = if (endpoint.isNotEmpty()) colors.textPrimary else colors.textMuted,
                     fontSize = 11.sp,
                     fontFamily = FontFamily.Monospace
                 )
@@ -125,8 +119,8 @@ fun NodeScreen() {
         Spacer(modifier = Modifier.height(28.dp))
 
         Text(
-            text = "ENDPOINT ADDRESS",
-            color = Zinc500,
+            text = buniString("endpoint_address"),
+            color = colors.textMuted,
             fontSize = 10.sp,
             fontFamily = FontFamily.Monospace,
             letterSpacing = 1.sp
@@ -140,16 +134,16 @@ fun NodeScreen() {
                 endpoint = it
                 settings.setWireGuardEndpoint(it)
             },
-            placeholder = { Text("e.g. 198.51.100.1:51820", color = Zinc600, fontSize = 13.sp) },
+            placeholder = { Text("e.g. 198.51.100.1:51820", color = colors.textMuted, fontSize = 13.sp) },
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),
             colors = OutlinedTextFieldDefaults.colors(
-                focusedContainerColor = Zinc950,
-                unfocusedContainerColor = Zinc950,
-                focusedBorderColor = Zinc600,
-                unfocusedBorderColor = Zinc800,
-                focusedTextColor = White,
-                unfocusedTextColor = White
+                focusedContainerColor = colors.surface,
+                unfocusedContainerColor = colors.surface,
+                focusedBorderColor = colors.borderLight,
+                unfocusedBorderColor = colors.border,
+                focusedTextColor = colors.textPrimary,
+                unfocusedTextColor = colors.textPrimary
             ),
             shape = RoundedCornerShape(8.dp)
         )
@@ -157,8 +151,8 @@ fun NodeScreen() {
         Spacer(modifier = Modifier.height(20.dp))
 
         Text(
-            text = "PEER PUBLIC KEY",
-            color = Zinc500,
+            text = buniString("peer_public_key"),
+            color = colors.textMuted,
             fontSize = 10.sp,
             fontFamily = FontFamily.Monospace,
             letterSpacing = 1.sp
@@ -172,16 +166,16 @@ fun NodeScreen() {
                 publicKey = it
                 settings.setWireGuardPublicKey(it)
             },
-            placeholder = { Text("Base64 public key from server", color = Zinc600, fontSize = 13.sp) },
+            placeholder = { Text("Base64 public key from server", color = colors.textMuted, fontSize = 13.sp) },
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),
             colors = OutlinedTextFieldDefaults.colors(
-                focusedContainerColor = Zinc950,
-                unfocusedContainerColor = Zinc950,
-                focusedBorderColor = Zinc600,
-                unfocusedBorderColor = Zinc800,
-                focusedTextColor = White,
-                unfocusedTextColor = White
+                focusedContainerColor = colors.surface,
+                unfocusedContainerColor = colors.surface,
+                focusedBorderColor = colors.borderLight,
+                unfocusedBorderColor = colors.border,
+                focusedTextColor = colors.textPrimary,
+                unfocusedTextColor = colors.textPrimary
             ),
             shape = RoundedCornerShape(8.dp)
         )
@@ -192,22 +186,22 @@ fun NodeScreen() {
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(8.dp))
-                .background(Zinc950)
-                .border(1.dp, Zinc800, RoundedCornerShape(8.dp))
+                .background(colors.surface)
+                .border(1.dp, colors.border, RoundedCornerShape(8.dp))
                 .padding(16.dp)
         ) {
             Column {
                 Text(
-                    text = "ABOUT TUNNEL MODE",
-                    color = Zinc500,
+                    text = buniString("about_tunnel"),
+                    color = colors.textMuted,
                     fontSize = 10.sp,
                     fontFamily = FontFamily.Monospace,
                     letterSpacing = 1.sp
                 )
                 Spacer(modifier = Modifier.height(6.dp))
                 Text(
-                    text = "When activated on the main dashboard, Buni encapsulates 100% of device network traffic (0.0.0.0/0) through this remote node. Your public IP is completely masked.",
-                    color = Zinc400,
+                    text = buniString("about_tunnel_desc"),
+                    color = colors.textSecondary,
                     fontSize = 11.sp,
                     lineHeight = 16.sp
                 )
