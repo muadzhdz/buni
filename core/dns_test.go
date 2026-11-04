@@ -3,6 +3,7 @@ package core
 import (
 	"encoding/binary"
 	"net"
+	"strings"
 	"testing"
 )
 
@@ -12,10 +13,12 @@ func buildMockQuery(domain string, qtype uint16) []byte {
 	binary.BigEndian.PutUint16(buf[2:4], 0x0100)
 	binary.BigEndian.PutUint16(buf[4:6], 1)
 
-	parts := []string{"google", "com"}
+	parts := strings.Split(domain, ".")
 	for _, p := range parts {
-		buf = append(buf, byte(len(p)))
-		buf = append(buf, []byte(p)...)
+		if len(p) > 0 {
+			buf = append(buf, byte(len(p)))
+			buf = append(buf, []byte(p)...)
+		}
 	}
 	buf = append(buf, 0x00)
 
