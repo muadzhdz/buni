@@ -42,7 +42,7 @@ class MainActivity : ComponentActivity() {
                 val stats by BuniVpnService.statsFlow.collectAsState()
                 val logs by BuniVpnService.logsFlow.collectAsState()
 
-                DashboardScreen(
+                AppShell(
                     isActive = isRunning,
                     stats = stats,
                     logs = logs,

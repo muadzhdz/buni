@@ -83,6 +83,8 @@ class BuniVpnService : VpnService() {
         } catch (e: Exception) {
         }
 
+        val settings = dev.buni.core.BuniSettings(this)
+
         val builder = Builder().apply {
             setSession("Buni")
             setMtu(1500)
@@ -90,6 +92,14 @@ class BuniVpnService : VpnService() {
             addDnsServer("10.233.0.2")
             addRoute("10.233.0.2", 32)
             setBlocking(true)
+
+            val whitelisted = settings.getWhitelistedPackages()
+            for (pkg in whitelisted) {
+                try {
+                    addDisallowedApplication(pkg)
+                } catch (ignored: Exception) {
+                }
+            }
         }
 
         try {
@@ -213,7 +223,8 @@ class BuniVpnService : VpnService() {
             protect(socket)
             socket.soTimeout = 2500
 
-            val targetIp = InetAddress.getByAddress(byteArrayOf(1, 1, 1, 1))
+            val dnsStr = dev.buni.core.BuniSettings(this).getUpstreamDns()
+            val targetIp = InetAddress.getByName(dnsStr)
             val sendPacket = DatagramPacket(payload, payload.size, targetIp, 53)
             socket.send(sendPacket)
 

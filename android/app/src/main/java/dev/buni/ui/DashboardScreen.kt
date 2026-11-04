@@ -111,6 +111,8 @@ fun DashboardScreen(
         Spacer(modifier = Modifier.height(24.dp))
 
         InspectionConsole(logs = logs)
+
+        Spacer(modifier = Modifier.height(90.dp))
     }
 }
 
