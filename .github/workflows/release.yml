@@ -36,9 +36,6 @@ jobs:
           cd core
           go test -v -race ./...
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-
       - name: Build Android APK
         run: |
           cd android
