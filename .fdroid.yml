@@ -12,7 +12,7 @@ UpdateCheckMode: Tags
 Builds:
   - versionName: 0.1.0-alpha
     versionCode: 1
-    commit: v0.1.0-alpha
+    commit: f188ac0295677891cb6e4eb0817d01f63f25ed36
     subdir: android
     gradle:
       - yes
