@@ -44,14 +44,15 @@ jobs:
 
       - name: Package Artifacts
         run: |
-          VERSION="${GITHUB_REF_NAME}"
+          VERSION="${{ github.ref_name }}"
           cp android/app/build/outputs/apk/debug/app-debug.apk "buni-${VERSION}.apk"
           sha256sum "buni-${VERSION}.apk" > "buni-${VERSION}.apk.sha256"
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          name: "Buni ${GITHUB_REF_NAME}"
+          name: "Buni ${{ github.ref_name }}"
+          tag_name: ${{ github.ref_name }}
           files: |
             buni-*.apk
             buni-*.apk.sha256
