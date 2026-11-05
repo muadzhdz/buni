@@ -1,0 +1,10 @@
+Buni adalah klien privasi jaringan defensif berperforma tinggi, sinkhole DNS dalam memori, dan orkestrator WireGuard untuk Android.
+
+Fitur Utama:
+- Mode PERISAI: Mencegat port UDP 53 melalui Android VpnService (10.233.0.1/30). Mencocokkan kueri DNS dengan daftar blokir dalam memori, mengembalikan jawaban sintetis 0.0.0.0 dengan latensi 0ms. Kueri yang diizinkan diteruskan melalui socket terlindungi DoH (RFC 8484).
+- Mode TUNNEL: Mengenkapsulasi seluruh lalu lintas data perangkat (0.0.0.0/0, ::/0) ke dalam datagram terotentikasi ChaCha20-Poly1305 WireGuard.
+- Adblock OEM Universal: Dioptimalkan untuk memutus jaringan iklan dan telemetri vendor bawaan pada seluruh perangkat Android.
+- Split-Tunneling Per Aplikasi: Kecualikan aplikasi tertentu agar terhubung langsung ke internet seluler/Wi-Fi tanpa melalui perisai.
+- Mesin Tema Ganda: Pilihan tema Zinc Terang kontras tinggi dan mode Gelap Obsidian OLED murni dengan deteksi otomatis sistem Android.
+- Lokalisasi Dwibahasa: Pergantian dinamis langsung antara Bahasa Indonesia dan Bahasa Inggris.
+- Nol Bloatware: Implementasi bersih tanpa pelacak pihak ketiga, tanpa analitik, dan tanpa dependensi invasif.

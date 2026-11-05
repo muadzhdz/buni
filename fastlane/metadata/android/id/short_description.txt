@@ -1,0 +1,1 @@
+Perisai privasi jaringan. Sinkhole DNS tanpa latensi dan tunnel WireGuard untuk Android.

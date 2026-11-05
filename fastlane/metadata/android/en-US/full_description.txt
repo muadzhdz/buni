@@ -1,0 +1,10 @@
+Buni is a defensive, high-performance network privacy client, in-memory DNS sinkhole, and WireGuard orchestrator for Android.
+
+Key Features:
+- SHIELD Mode: Intercepts UDP port 53 via Android VpnService (10.233.0.1/30). Matches queries against an in-memory blocklist, returning synthetic 0.0.0.0 replies with 0ms roundtrip. Allowed queries route via protected TLS DoH sockets.
+- TUNNEL Mode: Encapsulates all device IP traffic (0.0.0.0/0, ::/0) into authenticated ChaCha20-Poly1305 WireGuard datagrams.
+- Universal OEM Adblock: Pre-configured to terminate ad networks and invasive vendor telemetry across Android devices.
+- Per-App Split Tunneling: Bypass specific applications directly to WAN while keeping the rest of the device secured.
+- Dual Theme Engine: High-contrast Zinc daylight and OLED obsidian stealth themes with automatic system switching.
+- Bilingual Localization: Dynamic runtime switching between English and Indonesian.
+- Zero-Bloat Architecture: Pure userspace implementation with zero trackers, zero analytics, and no external dependencies.
