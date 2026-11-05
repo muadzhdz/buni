@@ -59,17 +59,13 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import dev.buni.core.EngineMode
 import dev.buni.core.Language
 import dev.buni.core.buniString
 import dev.buni.theme.Emerald500
 import dev.buni.theme.buniColors
 import kotlin.math.cos
 import kotlin.math.sin
-
-enum class EngineMode {
-    SHIELD,
-    TUNNEL
-}
 
 @Composable
 fun DashboardScreen(
@@ -78,11 +74,13 @@ fun DashboardScreen(
     logs: List<String>,
     isDarkMode: Boolean,
     currentLanguage: Language,
+    currentMode: EngineMode,
+    onModeChange: (EngineMode) -> Unit,
     onToggleTheme: () -> Unit,
     onToggleLanguage: () -> Unit,
     onTogglePower: () -> Unit
 ) {
-    var selectedMode by remember { mutableStateOf(EngineMode.SHIELD) }
+    val selectedMode = currentMode
     val scrollState = rememberScrollState()
     val colors = buniColors
 
@@ -90,26 +88,12 @@ fun DashboardScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(colors.background)
-            .statusBarsPadding()
-            .navigationBarsPadding()
             .verticalScroll(scrollState)
             .padding(horizontal = 20.dp, vertical = 16.dp)
     ) {
-        HeaderSection(
-            isActive = isActive,
-            latencyMs = stats.third,
-            mode = selectedMode,
-            isDarkMode = isDarkMode,
-            currentLanguage = currentLanguage,
-            onToggleTheme = onToggleTheme,
-            onToggleLanguage = onToggleLanguage
-        )
-
-        Spacer(modifier = Modifier.height(20.dp))
-
         SlidingModeSelector(
             currentMode = selectedMode,
-            onModeSelect = { selectedMode = it }
+            onModeSelect = onModeChange
         )
 
         Spacer(modifier = Modifier.height(24.dp))
@@ -134,7 +118,7 @@ fun DashboardScreen(
             logs = logs
         )
 
-        Spacer(modifier = Modifier.height(80.dp))
+        Spacer(modifier = Modifier.height(100.dp))
     }
 }
 
@@ -605,7 +589,7 @@ private fun UnifiedTelemetryCard(
 
             if (displayedLogs.isEmpty()) {
                 Text(
-                    text = if (filterBlockedOnly) "> no blocked queries recorded yet" else buniString("awaiting_packets"),
+                    text = if (filterBlockedOnly) buniString("no_blocked_queries") else buniString("awaiting_packets"),
                     color = colors.textMuted,
                     fontSize = 11.sp,
                     fontFamily = FontFamily.Monospace,

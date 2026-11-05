@@ -1,0 +1,61 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    name: Build & Release APK
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+
+      - name: Run Go Core Tests
+        run: |
+          cd core
+          go test -v -race ./...
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Build Android APK
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug
+
+      - name: Package Artifacts
+        run: |
+          VERSION="${GITHUB_REF_NAME}"
+          cp android/app/build/outputs/apk/debug/app-debug.apk "buni-${VERSION}.apk"
+          sha256sum "buni-${VERSION}.apk" > "buni-${VERSION}.apk.sha256"
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "Buni ${GITHUB_REF_NAME}"
+          files: |
+            buni-*.apk
+            buni-*.apk.sha256
+          generate_release_notes: true
+          draft: false
+          prerelease: false

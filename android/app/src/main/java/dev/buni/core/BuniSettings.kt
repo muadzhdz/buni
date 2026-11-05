@@ -3,6 +3,17 @@ package dev.buni.core
 import android.content.Context
 import android.content.SharedPreferences
 
+enum class EngineMode {
+    SHIELD,
+    TUNNEL
+}
+
+enum class ThemeMode {
+    SYSTEM,
+    DARK,
+    LIGHT
+}
+
 class BuniSettings(context: Context) {
 
     private val prefs: SharedPreferences = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -60,6 +71,19 @@ class BuniSettings(context: Context) {
         prefs.edit().putBoolean(KEY_FILTER_MALWARE, enabled).apply()
     }
 
+    fun getThemeMode(): ThemeMode {
+        val modeStr = prefs.getString(KEY_THEME_MODE, "SYSTEM") ?: "SYSTEM"
+        return try {
+            ThemeMode.valueOf(modeStr)
+        } catch (e: Exception) {
+            ThemeMode.SYSTEM
+        }
+    }
+
+    fun setThemeMode(mode: ThemeMode) {
+        prefs.edit().putString(KEY_THEME_MODE, mode.name).apply()
+    }
+
     fun isDarkMode(): Boolean {
         return prefs.getBoolean(KEY_DARK_MODE, true)
     }
@@ -93,6 +117,15 @@ class BuniSettings(context: Context) {
         prefs.edit().putString(KEY_WG_PUBKEY, pubKey).apply()
     }
 
+    fun getEngineMode(): EngineMode {
+        val modeStr = prefs.getString(KEY_ENGINE_MODE, "SHIELD") ?: "SHIELD"
+        return if (modeStr == "TUNNEL") EngineMode.TUNNEL else EngineMode.SHIELD
+    }
+
+    fun setEngineMode(mode: EngineMode) {
+        prefs.edit().putString(KEY_ENGINE_MODE, mode.name).apply()
+    }
+
     companion object {
         private const val PREFS_NAME = "buni_user_settings"
         private const val KEY_WHITELIST = "pref_whitelisted_apps"
@@ -104,5 +137,7 @@ class BuniSettings(context: Context) {
         private const val KEY_WG_PUBKEY = "pref_wg_pubkey"
         private const val KEY_DARK_MODE = "pref_dark_mode"
         private const val KEY_LANGUAGE = "pref_language"
+        private const val KEY_ENGINE_MODE = "pref_engine_mode"
+        private const val KEY_THEME_MODE = "pref_theme_mode"
     }
 }

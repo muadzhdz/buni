@@ -2,59 +2,27 @@
 
 The hidden network shield.
 
-Hybrid DNS privacy resolver, in-memory domain sinkhole, and Android network client.
-
----
+A defensive, high-performance network privacy client, in-memory DNS sinkhole, and WireGuard uplink orchestrator for Android.
 
 ## Architecture
 
-```text
-               +-------------------------------------------------------------+
-               |                         buni core                           |
-               |                                                             |
-               |  +--------------------+             +--------------------+  |
-               |  |  TunRunner (tun0)  |             |  DoH DNS Client    |  |
-               |  |  - IPv4 Packet Loop|             |  - RFC 1035 Wire   |  |
-               |  |  - UDP 53 Handler  |             |  - Cloudflare Upstr|  |
-               |  |  - Reply Crafter   |             |  - Ad Sinkholing   |  |
-               |  +---------+----------+             +---------+----------+  |
-               +------------|----------------------------------|-------------+
-                            |                                  |
-   [ Android Apps ]         |                                  |
-           |                v                                  v
-           +=======> [ tun0: 10.233.0.1 ] ─► [ UDP :53 ] ──► [ Local Handler ]
-                            |                                  | (HTTPS 443)
-                            |                                  v
-                            +───────────────────────────────► [ DoH Upstream ]
-```
+- **SHIELD**: Zero-latency userspace DNS sinkhole on `tun0` (`10.233.0.1/30`). Evaluates DNS queries against an in-memory hash trie, terminating tracker and ad telemetries at `0.0.0.0` before WAN transit. Clean queries resolve over protected DoH (RFC 8484) sockets.
+- **TUNNEL**: Full-device encapsulation (`0.0.0.0/0`, `::/0`) into authenticated ChaCha20-Poly1305 WireGuard datagrams.
 
----
-
-## Directory Layout
-
-```text
-buni/
-├── core/
-│   ├── dns.go            # RFC 1035 wire parser & DoH client
-│   ├── sinkhole.go       # In-memory domain blocklist
-│   ├── engine.go         # Coordinator & telemetry metrics
-│   ├── tun.go            # TUN packet loop & IPv4 UDP crafter
-│   └── bridge.go         # Android JNI bridge entrypoint
-│
-└── android/
-    └── app/src/main/
-        ├── AndroidManifest.xml
-        └── java/dev/buni/
-            ├── BuniApp.kt
-            ├── service/BuniVpnService.kt
-            ├── theme/Color.kt & Theme.kt
-            └── ui/MainActivity.kt & DashboardScreen.kt
-```
-
----
-
-## Build & Test
+## Building
 
 ```bash
-make test
+cd android
+./gradlew assembleRelease
 ```
+
+## Verification
+
+```bash
+cd core
+go test -v -race ./...
+```
+
+## License
+
+GPL-3.0-or-later

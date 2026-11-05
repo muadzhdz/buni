@@ -4,6 +4,7 @@ import android.content.Intent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -30,7 +31,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -53,6 +56,7 @@ fun AppsScreen() {
     val context = LocalContext.current
     val settings = remember { BuniSettings(context) }
     val colors = buniColors
+    val focusManager = LocalFocusManager.current
 
     var searchQuery by remember { mutableStateOf("") }
     var appsList by remember { mutableStateOf<List<InstalledAppInfo>>(emptyList()) }
@@ -95,24 +99,13 @@ fun AppsScreen() {
         modifier = Modifier
             .fillMaxSize()
             .background(colors.background)
-            .statusBarsPadding()
-            .padding(horizontal = 20.dp, vertical = 20.dp)
+            .pointerInput(Unit) {
+                detectTapGestures {
+                    focusManager.clearFocus()
+                }
+            }
+            .padding(horizontal = 20.dp, vertical = 16.dp)
     ) {
-        Text(
-            text = buniString("split_tunneling"),
-            color = colors.textPrimary,
-            fontSize = 24.sp,
-            fontWeight = FontWeight.Bold,
-            letterSpacing = 2.sp
-        )
-        Text(
-            text = buniString("split_sub"),
-            color = colors.textMuted,
-            fontSize = 12.sp
-        )
-
-        Spacer(modifier = Modifier.height(16.dp))
-
         OutlinedTextField(
             value = searchQuery,
             onValueChange = { searchQuery = it },
@@ -122,13 +115,35 @@ fun AppsScreen() {
             colors = OutlinedTextFieldDefaults.colors(
                 focusedContainerColor = colors.surface,
                 unfocusedContainerColor = colors.surface,
-                focusedBorderColor = colors.borderLight,
+                focusedBorderColor = Emerald500,
                 unfocusedBorderColor = colors.border,
                 focusedTextColor = colors.textPrimary,
                 unfocusedTextColor = colors.textPrimary
             ),
             shape = RoundedCornerShape(8.dp)
         )
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "${filteredApps.size} ${buniString("apps_installed")}",
+                color = colors.textMuted,
+                fontSize = 11.sp,
+                fontFamily = FontFamily.Monospace
+            )
+            Text(
+                text = "${filteredApps.count { it.isBypassed }} ${buniString("bypassed")}",
+                color = colors.accent,
+                fontSize = 11.sp,
+                fontFamily = FontFamily.Monospace,
+                fontWeight = FontWeight.SemiBold
+            )
+        }
 
         Spacer(modifier = Modifier.height(16.dp))
 
@@ -193,7 +208,7 @@ fun AppsScreen() {
                     )
                 }
                 item {
-                    Spacer(modifier = Modifier.height(80.dp))
+                    Spacer(modifier = Modifier.height(100.dp))
                 }
             }
         }

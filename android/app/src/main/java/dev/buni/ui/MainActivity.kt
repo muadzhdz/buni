@@ -11,6 +11,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -20,8 +21,10 @@ import androidx.compose.runtime.setValue
 import dev.buni.core.BuniSettings
 import dev.buni.core.Language
 import dev.buni.core.LocalBuniLanguage
+import dev.buni.core.ThemeMode
 import dev.buni.service.BuniVpnService
 import dev.buni.theme.BuniTheme
+import dev.buni.util.BuniAudio
 
 class MainActivity : ComponentActivity() {
 
@@ -46,8 +49,16 @@ class MainActivity : ComponentActivity() {
         val settings = BuniSettings(this)
 
         setContent {
-            var isDarkMode by remember { mutableStateOf(settings.isDarkMode()) }
+            var currentThemeMode by remember { mutableStateOf(settings.getThemeMode()) }
             var currentLanguage by remember { mutableStateOf(settings.getLanguage()) }
+            var currentMode by remember { mutableStateOf(settings.getEngineMode()) }
+
+            val systemInDark = isSystemInDarkTheme()
+            val isDarkMode = when (currentThemeMode) {
+                ThemeMode.SYSTEM -> systemInDark
+                ThemeMode.DARK -> true
+                ThemeMode.LIGHT -> false
+            }
 
             CompositionLocalProvider(LocalBuniLanguage provides currentLanguage) {
                 BuniTheme(darkTheme = isDarkMode) {
@@ -60,11 +71,25 @@ class MainActivity : ComponentActivity() {
                         stats = stats,
                         logs = logs,
                         isDarkMode = isDarkMode,
+                        currentThemeMode = currentThemeMode,
                         currentLanguage = currentLanguage,
+                        currentMode = currentMode,
+                        onModeChange = {
+                            settings.setEngineMode(it)
+                            currentMode = it
+                        },
+                        onThemeModeChange = {
+                            settings.setThemeMode(it)
+                            currentThemeMode = it
+                        },
                         onToggleTheme = {
-                            val newMode = !isDarkMode
-                            settings.setDarkMode(newMode)
-                            isDarkMode = newMode
+                            val nextMode = when (currentThemeMode) {
+                                ThemeMode.SYSTEM -> ThemeMode.DARK
+                                ThemeMode.DARK -> ThemeMode.LIGHT
+                                ThemeMode.LIGHT -> ThemeMode.SYSTEM
+                            }
+                            settings.setThemeMode(nextMode)
+                            currentThemeMode = nextMode
                         },
                         onToggleLanguage = {
                             val newLang = if (currentLanguage == Language.EN) Language.ID else Language.EN
@@ -73,8 +98,10 @@ class MainActivity : ComponentActivity() {
                         },
                         onTogglePower = {
                             if (isRunning) {
+                                BuniAudio.playPowerOff()
                                 stopVpnService()
                             } else {
+                                BuniAudio.playPowerOn()
                                 prepareAndStartVpn()
                             }
                         }

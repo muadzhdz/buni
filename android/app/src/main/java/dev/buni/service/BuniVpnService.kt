@@ -23,6 +23,7 @@ import java.io.FileOutputStream
 import java.net.DatagramPacket
 import java.net.DatagramSocket
 import java.net.InetAddress
+import java.net.Socket
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -69,8 +70,22 @@ class BuniVpnService : VpnService() {
 
         loadBlocklist()
 
+        val settings = dev.buni.core.BuniSettings(this)
+        val mode = settings.getEngineMode()
+        val lang = settings.getLanguage()
+
         try {
-            val notification = buildNotification("Active", "Shielding network traffic")
+            val statusTitle = if (mode == dev.buni.core.EngineMode.TUNNEL) {
+                dev.buni.core.BuniStrings.get("notif_tunnel_active", lang)
+            } else {
+                dev.buni.core.BuniStrings.get("notif_shield_active", lang)
+            }
+            val statusDesc = if (mode == dev.buni.core.EngineMode.TUNNEL) {
+                dev.buni.core.BuniStrings.get("notif_tunnel_desc", lang)
+            } else {
+                dev.buni.core.BuniStrings.get("notif_shield_desc", lang)
+            }
+            val notification = buildNotification(statusTitle, statusDesc)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 startForeground(
                     NOTIFICATION_ID,
@@ -83,14 +98,17 @@ class BuniVpnService : VpnService() {
         } catch (e: Exception) {
         }
 
-        val settings = dev.buni.core.BuniSettings(this)
-
         val builder = Builder().apply {
-            setSession("Buni")
+            setSession(if (mode == dev.buni.core.EngineMode.TUNNEL) "Buni Tunnel" else "Buni Shield")
             setMtu(1500)
             addAddress("10.233.0.1", 30)
             addDnsServer("10.233.0.2")
-            addRoute("10.233.0.2", 32)
+
+            if (mode == dev.buni.core.EngineMode.TUNNEL) {
+                addRoute("0.0.0.0", 0)
+            } else {
+                addRoute("10.233.0.2", 32)
+            }
             setBlocking(true)
 
             val whitelisted = settings.getWhitelistedPackages()
@@ -108,6 +126,19 @@ class BuniVpnService : VpnService() {
                 _isRunning.value = true
                 serviceScope = CoroutineScope(Dispatchers.IO + Job())
                 serviceScope.launch {
+                    val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
+                    val now = timeFormat.format(Date())
+                    if (mode == dev.buni.core.EngineMode.TUNNEL) {
+                        val endpoint = settings.getWireGuardEndpoint()
+                        val pubKey = settings.getWireGuardPublicKey()
+                        if (endpoint.isNotEmpty() && pubKey.isNotEmpty()) {
+                            emitLog("[$now] WG $endpoint -> ${dev.buni.core.BuniStrings.get("log_wg_configured", lang)}")
+                        } else {
+                            emitLog("[$now] ${dev.buni.core.BuniStrings.get("log_wg_warn", lang)}")
+                        }
+                    } else {
+                        emitLog("[$now] ${dev.buni.core.BuniStrings.get("log_shield_active", lang)}")
+                    }
                     runPacketLoop(pfd)
                 }
             }
@@ -135,6 +166,7 @@ class BuniVpnService : VpnService() {
     private fun runPacketLoop(pfd: ParcelFileDescriptor) {
         val inStream = FileInputStream(pfd.fileDescriptor)
         val outStream = FileOutputStream(pfd.fileDescriptor)
+        val writeLock = Any()
         val buffer = ByteArray(1500)
 
         while (serviceScope.isActive) {
@@ -144,69 +176,38 @@ class BuniVpnService : VpnService() {
                     continue
                 }
 
-                val version = (buffer[0].toInt() shr 4) and 0x0F
+                val packetCopy = buffer.copyOf(length)
+                val version = (packetCopy[0].toInt() shr 4) and 0x0F
                 if (version != 4) {
                     continue
                 }
 
-                val ihl = (buffer[0].toInt() and 0x0F) * 4
-                if (length < ihl + 8) {
+                val ihl = (packetCopy[0].toInt() and 0x0F) * 4
+                if (packetCopy.size < ihl + 8) {
                     continue
                 }
 
-                val protocol = buffer[9].toInt() and 0xFF
+                val protocol = packetCopy[9].toInt() and 0xFF
                 if (protocol != 17) {
                     continue
                 }
 
-                val dstPort = ((buffer[ihl + 2].toInt() and 0xFF) shl 8) or (buffer[ihl + 3].toInt() and 0xFF)
+                val dstPort = ((packetCopy[ihl + 2].toInt() and 0xFF) shl 8) or (packetCopy[ihl + 3].toInt() and 0xFF)
                 if (dstPort != 53) {
                     continue
                 }
 
-                val udpLen = ((buffer[ihl + 4].toInt() and 0xFF) shl 8) or (buffer[ihl + 5].toInt() and 0xFF)
-                if (length < ihl + udpLen || udpLen < 8) {
+                val udpLen = ((packetCopy[ihl + 4].toInt() and 0xFF) shl 8) or (packetCopy[ihl + 5].toInt() and 0xFF)
+                if (packetCopy.size < ihl + udpLen || udpLen < 8) {
                     continue
                 }
 
-                val dnsPayload = buffer.copyOfRange(ihl + 8, ihl + udpLen)
-                val domain = parseDomainFromDns(dnsPayload)
-
+                val dnsPayload = packetCopy.copyOfRange(ihl + 8, ihl + udpLen)
                 totalQueries.incrementAndGet()
 
-                val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
-                val now = timeFormat.format(Date())
-
-                if (domain.isNotEmpty() && isDomainBlocked(domain)) {
-                    blockedQueries.incrementAndGet()
-                    val sinkReply = buildSinkholeDnsResponse(dnsPayload)
-                    if (sinkReply != null) {
-                        val replyPacket = craftIPv4UdpReply(buffer, ihl, sinkReply)
-                        outStream.write(replyPacket)
-                    }
-                    emitLog("[$now] SINK $domain -> DROPPED (0ms)")
-                } else {
-                    val start = System.currentTimeMillis()
-                    val upstreamReply = forwardDnsProtected(dnsPayload)
-                    val duration = System.currentTimeMillis() - start
-                    lastLatency.set(duration)
-
-                    if (upstreamReply != null && upstreamReply.isNotEmpty()) {
-                        val replyPacket = craftIPv4UdpReply(buffer, ihl, upstreamReply)
-                        outStream.write(replyPacket)
-                        val displayDomain = if (domain.isNotEmpty()) domain else "dns.query"
-                        emitLog("[$now] PASS $displayDomain -> RESOLVED (${duration}ms)")
-                    } else {
-                        val displayDomain = if (domain.isNotEmpty()) domain else "dns.query"
-                        emitLog("[$now] PASS $displayDomain -> TIMEOUT")
-                    }
+                serviceScope.launch(Dispatchers.IO) {
+                    processDnsPacket(packetCopy, ihl, dnsPayload, outStream, writeLock)
                 }
-
-                _statsFlow.value = Triple(
-                    totalQueries.get(),
-                    blockedQueries.get(),
-                    lastLatency.get()
-                )
 
             } catch (e: Exception) {
                 if (!serviceScope.isActive) {
@@ -216,15 +217,112 @@ class BuniVpnService : VpnService() {
         }
     }
 
+    private fun processDnsPacket(
+        packet: ByteArray,
+        ihl: Int,
+        dnsPayload: ByteArray,
+        outStream: FileOutputStream,
+        writeLock: Any
+    ) {
+        val domain = parseDomainFromDns(dnsPayload)
+        val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
+        val now = timeFormat.format(Date())
+
+        if (domain.isNotEmpty() && isDomainBlocked(domain)) {
+            blockedQueries.incrementAndGet()
+            val sinkReply = buildSinkholeDnsResponse(dnsPayload)
+            if (sinkReply != null) {
+                val replyPacket = craftIPv4UdpReply(packet, ihl, sinkReply)
+                synchronized(writeLock) {
+                    try {
+                        outStream.write(replyPacket)
+                    } catch (ignored: Exception) {
+                    }
+                }
+            }
+            emitLog("[$now] SINK $domain -> DROPPED (0ms)")
+        } else {
+            val start = System.currentTimeMillis()
+            val upstreamReply = forwardDnsProtected(dnsPayload)
+            val duration = System.currentTimeMillis() - start
+            lastLatency.set(duration)
+
+            if (upstreamReply != null && upstreamReply.isNotEmpty()) {
+                val replyPacket = craftIPv4UdpReply(packet, ihl, upstreamReply)
+                synchronized(writeLock) {
+                    try {
+                        outStream.write(replyPacket)
+                    } catch (ignored: Exception) {
+                    }
+                }
+                val displayDomain = if (domain.isNotEmpty()) domain else "dns.query"
+                emitLog("[$now] PASS $displayDomain -> RESOLVED (${duration}ms)")
+            } else {
+                val displayDomain = if (domain.isNotEmpty()) domain else "dns.query"
+                emitLog("[$now] PASS $displayDomain -> TIMEOUT")
+            }
+        }
+
+        _statsFlow.value = Triple(
+            totalQueries.get(),
+            blockedQueries.get(),
+            lastLatency.get()
+        )
+    }
+
     private fun forwardDnsProtected(payload: ByteArray): ByteArray? {
+        val dnsStr = dev.buni.core.BuniSettings(this).getUpstreamDns()
+        val (primaryIp, secondaryIp, dohHost) = when (dnsStr) {
+            "1.1.1.1" -> Triple("1.1.1.1", "1.0.0.1", "cloudflare-dns.com")
+            "9.9.9.9" -> Triple("9.9.9.9", "149.112.112.112", "")
+            "94.140.14.14" -> Triple("94.140.14.14", "94.140.15.15", "")
+            "8.8.8.8" -> Triple("8.8.8.8", "8.8.4.4", "dns.google")
+            else -> Triple(dnsStr, dnsStr, "")
+        }
+
+        val udp1 = queryUdp(primaryIp, payload, 700)
+        if (udp1 != null && udp1.isNotEmpty()) {
+            return udp1
+        }
+
+        if (secondaryIp != primaryIp) {
+            val udp2 = queryUdp(secondaryIp, payload, 700)
+            if (udp2 != null && udp2.isNotEmpty()) {
+                return udp2
+            }
+        }
+
+        if (dohHost.isNotEmpty()) {
+            val dohResp = queryDohProtected(primaryIp, dohHost, payload)
+            if (dohResp != null && dohResp.isNotEmpty()) {
+                return dohResp
+            }
+            if (secondaryIp != primaryIp) {
+                val dohResp2 = queryDohProtected(secondaryIp, dohHost, payload)
+                if (dohResp2 != null && dohResp2.isNotEmpty()) {
+                    return dohResp2
+                }
+            }
+        }
+
+        if (primaryIp != "8.8.8.8") {
+            val googleFallback = queryUdp("8.8.8.8", payload, 800)
+            if (googleFallback != null && googleFallback.isNotEmpty()) {
+                return googleFallback
+            }
+        }
+
+        return null
+    }
+
+    private fun queryUdp(ip: String, payload: ByteArray, timeoutMs: Int): ByteArray? {
         var socket: DatagramSocket? = null
         return try {
             socket = DatagramSocket()
             protect(socket)
-            socket.soTimeout = 2500
+            socket.soTimeout = timeoutMs
 
-            val dnsStr = dev.buni.core.BuniSettings(this).getUpstreamDns()
-            val targetIp = InetAddress.getByName(dnsStr)
+            val targetIp = InetAddress.getByName(ip)
             val sendPacket = DatagramPacket(payload, payload.size, targetIp, 53)
             socket.send(sendPacket)
 
@@ -237,6 +335,74 @@ class BuniVpnService : VpnService() {
             null
         } finally {
             socket?.close()
+        }
+    }
+
+    private fun queryDohProtected(endpointIp: String, hostHeader: String, payload: ByteArray): ByteArray? {
+        var rawSocket: Socket? = null
+        var sslSocket: javax.net.ssl.SSLSocket? = null
+        return try {
+            rawSocket = Socket()
+            protect(rawSocket)
+            rawSocket.soTimeout = 2000
+            rawSocket.connect(java.net.InetSocketAddress(endpointIp, 443), 1500)
+
+            val sslFactory = javax.net.ssl.HttpsURLConnection.getDefaultSSLSocketFactory()
+            sslSocket = sslFactory.createSocket(rawSocket, hostHeader, 443, true) as javax.net.ssl.SSLSocket
+            sslSocket.soTimeout = 2000
+            sslSocket.startHandshake()
+
+            val out = sslSocket.outputStream
+            val request = "POST /dns-query HTTP/1.1\r\n" +
+                    "Host: $hostHeader\r\n" +
+                    "Content-Type: application/dns-message\r\n" +
+                    "Accept: application/dns-message\r\n" +
+                    "Content-Length: ${payload.size}\r\n" +
+                    "Connection: close\r\n\r\n"
+
+            out.write(request.toByteArray(Charsets.US_ASCII))
+            out.write(payload)
+            out.flush()
+
+            val inStream = sslSocket.inputStream
+            val headerBuilder = java.io.ByteArrayOutputStream()
+            val singleByte = ByteArray(1)
+
+            while (inStream.read(singleByte) != -1) {
+                headerBuilder.write(singleByte[0].toInt())
+                val headerStr = headerBuilder.toString("US-ASCII")
+                if (headerStr.endsWith("\r\n\r\n")) {
+                    break
+                }
+            }
+
+            val headers = headerBuilder.toString("US-ASCII")
+            var contentLength = 0
+            for (line in headers.lines()) {
+                if (line.lowercase(Locale.ROOT).startsWith("content-length:")) {
+                    contentLength = line.substringAfter(":").trim().toIntOrNull() ?: 0
+                    break
+                }
+            }
+
+            if (contentLength <= 0 || contentLength > 4096) {
+                return null
+            }
+
+            val body = ByteArray(contentLength)
+            var bytesRead = 0
+            while (bytesRead < contentLength) {
+                val count = inStream.read(body, bytesRead, contentLength - bytesRead)
+                if (count == -1) break
+                bytesRead += count
+            }
+
+            if (bytesRead == contentLength) body else null
+        } catch (e: Exception) {
+            null
+        } finally {
+            try { sslSocket?.close() } catch (ignored: Exception) {}
+            try { rawSocket?.close() } catch (ignored: Exception) {}
         }
     }
 

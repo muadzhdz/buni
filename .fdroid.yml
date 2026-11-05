@@ -1,0 +1,18 @@
+AuthorName: "Muadz"
+Categories:
+  - Security
+  - Internet
+License: GPL-3.0-or-later
+SourceCode: "https://github.com/muadzhdz/buni"
+IssueTracker: "https://github.com/muadzhdz/buni/issues"
+
+AutoUpdateMode: Version v%v
+UpdateCheckMode: Tags
+
+Builds:
+  - versionName: 0.1.0-alpha
+    versionCode: 1
+    commit: v0.1.0-alpha
+    subdir: android
+    gradle:
+      - yes

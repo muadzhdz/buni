@@ -1,28 +1,35 @@
 package dev.buni.ui.components
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -46,31 +53,26 @@ fun ThumbDock(
     val tabs = NavTab.values()
     val colors = buniColors
 
-    BoxWithConstraints(
+    Column(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(999.dp))
             .background(colors.surface)
-            .border(1.dp, colors.border, RoundedCornerShape(999.dp))
-            .padding(4.dp)
+            .navigationBarsPadding()
     ) {
-        val tabWidth = maxWidth / tabs.size
-        val continuousPosition = (currentPage + pageOffsetFraction).coerceIn(0f, (tabs.size - 1).toFloat())
-        val indicatorOffset = tabWidth * continuousPosition
-
         Box(
             modifier = Modifier
-                .offset(x = indicatorOffset)
-                .width(tabWidth)
-                .height(44.dp)
-                .clip(RoundedCornerShape(999.dp))
-                .background(colors.surfaceVariant)
-                .border(1.dp, colors.borderLight, RoundedCornerShape(999.dp))
+                .fillMaxWidth()
+                .height(1.dp)
+                .background(colors.border)
         )
 
         Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceEvenly
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(64.dp)
+                .padding(horizontal = 8.dp),
+            horizontalArrangement = Arrangement.SpaceAround,
+            verticalAlignment = Alignment.CenterVertically
         ) {
             tabs.forEach { tab ->
                 val isSelected = tab.ordinal == currentPage
@@ -80,7 +82,8 @@ fun ThumbDock(
                     NavTab.SETTINGS -> buniString("nav_settings")
                 }
 
-                DockItem(
+                FluxNavItem(
+                    tab = tab,
                     title = title,
                     isSelected = isSelected,
                     onClick = { onTabSelected(tab) },
@@ -92,41 +95,145 @@ fun ThumbDock(
 }
 
 @Composable
-private fun DockItem(
+private fun FluxNavItem(
+    tab: NavTab,
     title: String,
     isSelected: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val colors = buniColors
+    val interactionSource = remember { MutableInteractionSource() }
+
+    val pillColor by animateColorAsState(
+        targetValue = if (isSelected) colors.surfaceVariant else Color.Transparent,
+        animationSpec = tween(durationMillis = 200)
+    )
+    val contentColor by animateColorAsState(
+        targetValue = if (isSelected) colors.textPrimary else colors.textMuted,
+        animationSpec = tween(durationMillis = 200)
+    )
 
     Column(
         modifier = modifier
-            .height(44.dp)
-            .clip(RoundedCornerShape(999.dp))
-            .background(Color.Transparent)
-            .clickable(onClick = onClick),
+            .clip(RoundedCornerShape(12.dp))
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClick
+            )
+            .padding(vertical = 4.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            if (isSelected) {
-                Box(
-                    modifier = Modifier
-                        .size(4.dp)
-                        .clip(CircleShape)
-                        .background(colors.accent)
+        Box(
+            modifier = Modifier
+                .size(width = 54.dp, height = 28.dp)
+                .clip(RoundedCornerShape(14.dp))
+                .background(pillColor),
+            contentAlignment = Alignment.Center
+        ) {
+            NavIconCanvas(tab = tab, color = contentColor)
+        }
+
+        Spacer(modifier = Modifier.height(3.dp))
+
+        Text(
+            text = title,
+            color = contentColor,
+            fontSize = 11.sp,
+            fontFamily = FontFamily.Monospace,
+            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+            letterSpacing = 0.5.sp
+        )
+    }
+}
+
+@Composable
+private fun NavIconCanvas(tab: NavTab, color: Color) {
+    Canvas(modifier = Modifier.size(18.dp)) {
+        val w = size.width
+        val h = size.height
+
+        when (tab) {
+            NavTab.SHIELD -> {
+                val path = Path().apply {
+                    moveTo(w * 0.5f, h * 0.08f)
+                    lineTo(w * 0.88f, h * 0.26f)
+                    lineTo(w * 0.88f, h * 0.56f)
+                    cubicTo(w * 0.88f, h * 0.78f, w * 0.68f, h * 0.92f, w * 0.5f, h * 0.98f)
+                    cubicTo(w * 0.32f, h * 0.92f, w * 0.12f, h * 0.78f, w * 0.12f, h * 0.56f)
+                    lineTo(w * 0.12f, h * 0.26f)
+                    close()
+                }
+                drawPath(path, color = color, style = Stroke(width = 1.8.dp.toPx(), cap = StrokeCap.Round))
+                drawLine(
+                    color = color,
+                    start = Offset(w * 0.5f, h * 0.32f),
+                    end = Offset(w * 0.5f, h * 0.68f),
+                    strokeWidth = 1.8.dp.toPx(),
+                    cap = StrokeCap.Round
                 )
-                Spacer(modifier = Modifier.width(6.dp))
             }
-            Text(
-                text = title,
-                color = if (isSelected) colors.textPrimary else colors.textMuted,
-                fontSize = 11.sp,
-                fontFamily = FontFamily.Monospace,
-                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                letterSpacing = 1.sp
-            )
+            NavTab.APPS -> {
+                val pad = 1.dp.toPx()
+                val itemSize = (w - pad * 3) / 2
+                drawRoundRect(
+                    color = color,
+                    topLeft = Offset(pad, pad),
+                    size = Size(itemSize, itemSize),
+                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(3.dp.toPx()),
+                    style = Stroke(width = 1.8.dp.toPx())
+                )
+                drawRoundRect(
+                    color = color,
+                    topLeft = Offset(pad * 2 + itemSize, pad),
+                    size = Size(itemSize, itemSize),
+                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(3.dp.toPx()),
+                    style = Stroke(width = 1.8.dp.toPx())
+                )
+                drawRoundRect(
+                    color = color,
+                    topLeft = Offset(pad, pad * 2 + itemSize),
+                    size = Size(itemSize, itemSize),
+                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(3.dp.toPx()),
+                    style = Stroke(width = 1.8.dp.toPx())
+                )
+                drawRoundRect(
+                    color = color,
+                    topLeft = Offset(pad * 2 + itemSize, pad * 2 + itemSize),
+                    size = Size(itemSize, itemSize),
+                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(3.dp.toPx()),
+                    style = Stroke(width = 1.8.dp.toPx())
+                )
+            }
+            NavTab.SETTINGS -> {
+                drawLine(
+                    color = color,
+                    start = Offset(w * 0.1f, h * 0.28f),
+                    end = Offset(w * 0.9f, h * 0.28f),
+                    strokeWidth = 1.8.dp.toPx(),
+                    cap = StrokeCap.Round
+                )
+                drawCircle(
+                    color = color,
+                    radius = 2.4.dp.toPx(),
+                    center = Offset(w * 0.35f, h * 0.28f)
+                )
+
+                drawLine(
+                    color = color,
+                    start = Offset(w * 0.1f, h * 0.72f),
+                    end = Offset(w * 0.9f, h * 0.72f),
+                    strokeWidth = 1.8.dp.toPx(),
+                    cap = StrokeCap.Round
+                )
+                drawCircle(
+                    color = color,
+                    radius = 2.4.dp.toPx(),
+                    center = Offset(w * 0.65f, h * 0.72f)
+                )
+            }
         }
     }
 }
