@@ -1,0 +1,2 @@
+-keep class dev.buni.** { *; }
+-dontwarn dev.buni.**
