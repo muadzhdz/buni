@@ -12,6 +12,5 @@ android/app/build/
 android/build/
 core/libbuni.so
 core/libbuni.h
-art/
 *.apk
 *.sha256

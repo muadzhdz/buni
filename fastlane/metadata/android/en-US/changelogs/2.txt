@@ -1,0 +1,6 @@
+- Dual-stack IPv6 DNS intercept with RFC 8200 checksum calculation
+- Curated 89k industrial-grade blocklist covering OEM trackers and top ad SDKs
+- Automatic Android 9+ Private DNS (DoT) bypass detection and warning card
+- Dynamic upstream DNS resolver status label and native XML string resources
+- Contrast sync for status bar and navigation bar matching active theme
+- Material 3 confirmation dialogs for toggles, DNS changes, and app bypass

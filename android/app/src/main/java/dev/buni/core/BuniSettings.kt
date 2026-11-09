@@ -3,11 +3,6 @@ package dev.buni.core
 import android.content.Context
 import android.content.SharedPreferences
 
-enum class EngineMode {
-    SHIELD,
-    TUNNEL
-}
-
 enum class ThemeMode {
     SYSTEM,
     DARK,
@@ -40,11 +35,27 @@ class BuniSettings(context: Context) {
     }
 
     fun getUpstreamDns(): String {
-        return prefs.getString(KEY_UPSTREAM_DNS, "1.1.1.1") ?: "1.1.1.1"
+        val custom = getCustomDns()
+        if (DnsEngine.isValidIpAddress(custom)) {
+            return custom
+        }
+        val dns = prefs.getString(KEY_UPSTREAM_DNS, "1.1.1.1") ?: "1.1.1.1"
+        return if (dns.isEmpty()) "1.1.1.1" else dns
     }
 
     fun setUpstreamDns(dns: String) {
         prefs.edit().putString(KEY_UPSTREAM_DNS, dns).apply()
+    }
+
+    fun getActiveDnsLabel(): String {
+        val currentDns = getUpstreamDns()
+        return when (currentDns) {
+            "1.1.1.1" -> "Cloudflare (1.1.1.1)"
+            "9.9.9.9" -> "Quad9 (9.9.9.9)"
+            "94.140.14.14" -> "AdGuard (94.140.14.14)"
+            "8.8.8.8" -> "Google (8.8.8.8)"
+            else -> "Custom ($currentDns)"
+        }
     }
 
     fun isFilterAdsEnabled(): Boolean {
@@ -101,29 +112,28 @@ class BuniSettings(context: Context) {
         prefs.edit().putString(KEY_LANGUAGE, lang.name).apply()
     }
 
-    fun getWireGuardEndpoint(): String {
-        return prefs.getString(KEY_WG_ENDPOINT, "") ?: ""
+    fun isVpnConsentGiven(): Boolean {
+        return prefs.getBoolean(KEY_VPN_CONSENT, false)
     }
 
-    fun setWireGuardEndpoint(endpoint: String) {
-        prefs.edit().putString(KEY_WG_ENDPOINT, endpoint).apply()
+    fun setVpnConsentGiven(given: Boolean) {
+        prefs.edit().putBoolean(KEY_VPN_CONSENT, given).apply()
     }
 
-    fun getWireGuardPublicKey(): String {
-        return prefs.getString(KEY_WG_PUBKEY, "") ?: ""
+    fun getLastRulesetUpdateTime(): Long {
+        return prefs.getLong(KEY_RULESET_UPDATE_TIME, 0L)
     }
 
-    fun setWireGuardPublicKey(pubKey: String) {
-        prefs.edit().putString(KEY_WG_PUBKEY, pubKey).apply()
+    fun setLastRulesetUpdateTime(time: Long) {
+        prefs.edit().putLong(KEY_RULESET_UPDATE_TIME, time).apply()
     }
 
-    fun getEngineMode(): EngineMode {
-        val modeStr = prefs.getString(KEY_ENGINE_MODE, "SHIELD") ?: "SHIELD"
-        return if (modeStr == "TUNNEL") EngineMode.TUNNEL else EngineMode.SHIELD
+    fun getCustomDns(): String {
+        return prefs.getString(KEY_CUSTOM_DNS, "") ?: ""
     }
 
-    fun setEngineMode(mode: EngineMode) {
-        prefs.edit().putString(KEY_ENGINE_MODE, mode.name).apply()
+    fun setCustomDns(ip: String) {
+        prefs.edit().putString(KEY_CUSTOM_DNS, ip).apply()
     }
 
     companion object {
@@ -133,11 +143,11 @@ class BuniSettings(context: Context) {
         private const val KEY_FILTER_ADS = "pref_filter_ads"
         private const val KEY_FILTER_TRACKERS = "pref_filter_trackers"
         private const val KEY_FILTER_MALWARE = "pref_filter_malware"
-        private const val KEY_WG_ENDPOINT = "pref_wg_endpoint"
-        private const val KEY_WG_PUBKEY = "pref_wg_pubkey"
         private const val KEY_DARK_MODE = "pref_dark_mode"
         private const val KEY_LANGUAGE = "pref_language"
-        private const val KEY_ENGINE_MODE = "pref_engine_mode"
         private const val KEY_THEME_MODE = "pref_theme_mode"
+        private const val KEY_VPN_CONSENT = "pref_vpn_consent_given"
+        private const val KEY_RULESET_UPDATE_TIME = "pref_ruleset_update_time"
+        private const val KEY_CUSTOM_DNS = "pref_custom_dns"
     }
 }

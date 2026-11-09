@@ -52,6 +52,7 @@ fun ThumbDock(
 ) {
     val tabs = NavTab.values()
     val colors = buniColors
+    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
 
     Column(
         modifier = modifier
@@ -86,7 +87,10 @@ fun ThumbDock(
                     tab = tab,
                     title = title,
                     isSelected = isSelected,
-                    onClick = { onTabSelected(tab) },
+                    onClick = {
+                        haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
+                        onTabSelected(tab)
+                    },
                     modifier = Modifier.weight(1f)
                 )
             }

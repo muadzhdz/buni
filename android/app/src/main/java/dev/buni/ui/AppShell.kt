@@ -37,7 +37,6 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import dev.buni.core.EngineMode
 import dev.buni.core.Language
 import dev.buni.core.ThemeMode
 import dev.buni.core.buniString
@@ -55,12 +54,12 @@ fun AppShell(
     isDarkMode: Boolean,
     currentThemeMode: ThemeMode,
     currentLanguage: Language,
-    currentMode: EngineMode,
-    onModeChange: (EngineMode) -> Unit,
+    activeDnsLabel: String,
     onThemeModeChange: (ThemeMode) -> Unit,
     onToggleTheme: () -> Unit,
     onToggleLanguage: () -> Unit,
-    onTogglePower: () -> Unit
+    onTogglePower: () -> Unit,
+    onDnsChanged: () -> Unit
 ) {
     var showingAbout by remember { mutableStateOf(false) }
 
@@ -91,7 +90,7 @@ fun AppShell(
         FluxHeader(
             currentPage = pagerState.currentPage,
             isActive = isActive,
-            currentMode = currentMode
+            activeDnsLabel = activeDnsLabel
         )
 
         Box(
@@ -109,9 +108,8 @@ fun AppShell(
                         stats = stats,
                         logs = logs,
                         isDarkMode = isDarkMode,
+                        activeDnsLabel = activeDnsLabel,
                         currentLanguage = currentLanguage,
-                        currentMode = currentMode,
-                        onModeChange = onModeChange,
                         onToggleTheme = onToggleTheme,
                         onToggleLanguage = onToggleLanguage,
                         onTogglePower = onTogglePower
@@ -122,6 +120,7 @@ fun AppShell(
                         currentLanguage = currentLanguage,
                         onThemeModeChange = onThemeModeChange,
                         onToggleLanguage = onToggleLanguage,
+                        onDnsChanged = onDnsChanged,
                         onOpenAbout = { showingAbout = true }
                     )
                 }
@@ -145,7 +144,7 @@ fun AppShell(
 private fun FluxHeader(
     currentPage: Int,
     isActive: Boolean,
-    currentMode: EngineMode
+    activeDnsLabel: String
 ) {
     val colors = buniColors
 
@@ -196,16 +195,12 @@ private fun FluxHeader(
                 Spacer(modifier = Modifier.width(12.dp))
                 Column {
                     val title = when (currentPage) {
-                        0 -> if (currentMode == EngineMode.SHIELD) buniString("hdr_shield_title") else buniString("hdr_tunnel_title")
+                        0 -> buniString("hdr_shield_title")
                         1 -> buniString("hdr_apps_title")
                         else -> buniString("hdr_settings_title")
                     }
                     val subtitle = when (currentPage) {
-                        0 -> if (currentMode == EngineMode.SHIELD) {
-                            if (isActive) buniString("hdr_shield_sub_active") else buniString("hdr_shield_sub_idle")
-                        } else {
-                            if (isActive) buniString("hdr_tunnel_sub_active") else buniString("hdr_tunnel_sub_idle")
-                        }
+                        0 -> if (isActive) "active · direct wan · $activeDnsLabel" else "idle · standby · $activeDnsLabel"
                         1 -> buniString("hdr_apps_sub")
                         else -> buniString("hdr_settings_sub")
                     }
@@ -241,11 +236,7 @@ private fun FluxHeader(
                     )
                     Spacer(modifier = Modifier.width(5.dp))
                     Text(
-                        text = if (isActive) {
-                            if (currentMode == EngineMode.SHIELD) buniString("status_shield") else buniString("status_tunnel")
-                        } else {
-                            buniString("status_standby")
-                        },
+                        text = if (isActive) buniString("status_shield") else buniString("status_standby"),
                         color = if (isActive) colors.textPrimary else colors.textMuted,
                         fontSize = 10.sp,
                         fontWeight = FontWeight.Bold,

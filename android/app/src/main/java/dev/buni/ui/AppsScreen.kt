@@ -32,8 +32,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -42,6 +44,7 @@ import dev.buni.core.BuniSettings
 import dev.buni.core.buniString
 import dev.buni.theme.Emerald500
 import dev.buni.theme.buniColors
+import dev.buni.ui.components.BuniConfirmDialog
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -57,10 +60,12 @@ fun AppsScreen() {
     val settings = remember { BuniSettings(context) }
     val colors = buniColors
     val focusManager = LocalFocusManager.current
+    val haptic = LocalHapticFeedback.current
 
     var searchQuery by remember { mutableStateOf("") }
     var appsList by remember { mutableStateOf<List<InstalledAppInfo>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
+    var pendingAppToggle by remember { mutableStateOf<InstalledAppInfo?>(null) }
 
     LaunchedEffect(Unit) {
         withContext(Dispatchers.IO) {
@@ -200,10 +205,8 @@ fun AppsScreen() {
                     AppRowItem(
                         app = app,
                         onToggle = {
-                            val newStatus = settings.toggleAppWhitelist(app.packageName)
-                            appsList = appsList.map {
-                                if (it.packageName == app.packageName) it.copy(isBypassed = newStatus) else it
-                            }
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            pendingAppToggle = app
                         }
                     )
                 }
@@ -211,6 +214,30 @@ fun AppsScreen() {
                     Spacer(modifier = Modifier.height(100.dp))
                 }
             }
+        }
+
+        pendingAppToggle?.let { targetApp ->
+            val willBypass = !targetApp.isBypassed
+            val title = if (willBypass) buniString("confirm_app_bypass_title") else buniString("confirm_app_shield_title")
+            val template = if (willBypass) buniString("confirm_app_bypass_desc") else buniString("confirm_app_shield_desc")
+            val message = template.replace("%1\$s", targetApp.name)
+
+            BuniConfirmDialog(
+                title = title,
+                message = message,
+                confirmText = buniString("dialog_yes"),
+                dismissText = buniString("dialog_no"),
+                onConfirm = {
+                    val newStatus = settings.toggleAppWhitelist(targetApp.packageName)
+                    appsList = appsList.map {
+                        if (it.packageName == targetApp.packageName) it.copy(isBypassed = newStatus) else it
+                    }
+                    pendingAppToggle = null
+                },
+                onDismiss = {
+                    pendingAppToggle = null
+                }
+            )
         }
     }
 }

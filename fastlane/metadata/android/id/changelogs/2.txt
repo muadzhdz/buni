@@ -1,0 +1,6 @@
+- Pencegatan DNS IPv6 dual-stack dengan perhitungan checksum RFC 8200
+- Daftar blokir 89k domain mencakup pelacak OEM dan SDK iklan seluler utama
+- Deteksi dan kartu peringatan otomatis kebocoran Private DNS (DoT) Android 9+
+- Label status resolver DNS dinamis dan pelokalan sumber daya XML Android native
+- Sinkronisasi kontras status bar dan navigasi mengikuti tema aktif
+- Dialog konfirmasi Material 3 untuk filter, pergantian DNS, dan pintasan aplikasi

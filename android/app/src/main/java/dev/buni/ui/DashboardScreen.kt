@@ -59,13 +59,10 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import dev.buni.core.EngineMode
 import dev.buni.core.Language
 import dev.buni.core.buniString
 import dev.buni.theme.Emerald500
 import dev.buni.theme.buniColors
-import kotlin.math.cos
-import kotlin.math.sin
 
 @Composable
 fun DashboardScreen(
@@ -73,16 +70,44 @@ fun DashboardScreen(
     stats: Triple<Long, Long, Long>,
     logs: List<String>,
     isDarkMode: Boolean,
+    activeDnsLabel: String,
     currentLanguage: Language,
-    currentMode: EngineMode,
-    onModeChange: (EngineMode) -> Unit,
     onToggleTheme: () -> Unit,
     onToggleLanguage: () -> Unit,
     onTogglePower: () -> Unit
 ) {
-    val selectedMode = currentMode
     val scrollState = rememberScrollState()
     val colors = buniColors
+    val context = androidx.compose.ui.platform.LocalContext.current
+
+    var privateDnsMode by remember {
+        mutableStateOf(
+            try {
+                android.provider.Settings.Global.getString(context.contentResolver, "private_dns_mode") ?: "off"
+            } catch (e: Exception) {
+                "off"
+            }
+        )
+    }
+
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    androidx.compose.runtime.DisposableEffect(lifecycleOwner) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+                privateDnsMode = try {
+                    android.provider.Settings.Global.getString(context.contentResolver, "private_dns_mode") ?: "off"
+                } catch (e: Exception) {
+                    "off"
+                }
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
+
+    val isPrivateDnsActive = privateDnsMode != "off" && privateDnsMode != "unknown"
 
     Column(
         modifier = Modifier
@@ -91,21 +116,38 @@ fun DashboardScreen(
             .verticalScroll(scrollState)
             .padding(horizontal = 20.dp, vertical = 16.dp)
     ) {
-        SlidingModeSelector(
-            currentMode = selectedMode,
-            onModeSelect = onModeChange
-        )
-
-        Spacer(modifier = Modifier.height(24.dp))
-
         Box(
             modifier = Modifier.fillMaxWidth(),
             contentAlignment = Alignment.Center
         ) {
             InteractivePowerButton(
                 isActive = isActive,
-                mode = selectedMode,
+                activeDnsLabel = activeDnsLabel,
                 onToggle = onTogglePower
+            )
+        }
+
+        if (isPrivateDnsActive) {
+            Spacer(modifier = Modifier.height(16.dp))
+            PrivateDnsWarningCard(
+                currentLanguage = currentLanguage,
+                onOpenSettings = {
+                    try {
+                        val intent = android.content.Intent("android.settings.NETWORK_PROVIDER_SETTINGS")
+                        intent.flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK
+                        context.startActivity(intent)
+                    } catch (e: Exception) {
+                        try {
+                            val fallbackIntent = android.content.Intent(android.provider.Settings.ACTION_WIRELESS_SETTINGS)
+                            fallbackIntent.flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK
+                            context.startActivity(fallbackIntent)
+                        } catch (e2: Exception) {
+                            val appSettings = android.content.Intent(android.provider.Settings.ACTION_SETTINGS)
+                            appSettings.flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK
+                            context.startActivity(appSettings)
+                        }
+                    }
+                }
             )
         }
 
@@ -123,237 +165,13 @@ fun DashboardScreen(
 }
 
 @Composable
-private fun HeaderSection(
-    isActive: Boolean,
-    latencyMs: Long,
-    mode: EngineMode,
-    isDarkMode: Boolean,
-    currentLanguage: Language,
-    onToggleTheme: () -> Unit,
-    onToggleLanguage: () -> Unit
-) {
-    val colors = buniColors
-
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Column {
-            Text(
-                text = "buni",
-                color = colors.textPrimary,
-                fontSize = 24.sp,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = 2.sp
-            )
-            Text(
-                text = if (mode == EngineMode.SHIELD) {
-                    buniString("app_tagline")
-                } else {
-                    buniString("tunnel_tagline")
-                },
-                color = colors.textMuted,
-                fontSize = 12.sp
-            )
-        }
-
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(colors.surface)
-                    .border(1.dp, colors.border, RoundedCornerShape(8.dp))
-                    .clickable(onClick = onToggleLanguage)
-                    .padding(horizontal = 14.dp, vertical = 9.dp)
-            ) {
-                Text(
-                    text = if (currentLanguage == Language.EN) "EN" else "ID",
-                    color = colors.textPrimary,
-                    fontSize = 12.sp,
-                    fontFamily = FontFamily.Monospace,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-
-            Spacer(modifier = Modifier.width(8.dp))
-
-            Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(colors.surface)
-                    .border(1.dp, colors.border, RoundedCornerShape(8.dp))
-                    .clickable(onClick = onToggleTheme)
-                    .padding(horizontal = 14.dp, vertical = 10.dp)
-            ) {
-                ThemeToggleIcon(
-                    isDarkMode = isDarkMode,
-                    color = colors.textPrimary
-                )
-            }
-
-            Spacer(modifier = Modifier.width(8.dp))
-
-            Row(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(colors.surface)
-                    .border(1.dp, colors.border, RoundedCornerShape(8.dp))
-                    .padding(horizontal = 12.dp, vertical = 9.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(6.dp)
-                        .clip(CircleShape)
-                        .background(if (isActive) Emerald500 else colors.textMuted)
-                )
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(
-                    text = if (isActive) "${latencyMs}ms" else buniString("standby"),
-                    color = if (isActive) colors.textPrimary else colors.textMuted,
-                    fontSize = 11.sp,
-                    fontFamily = FontFamily.Monospace,
-                    fontWeight = FontWeight.SemiBold
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun ThemeToggleIcon(isDarkMode: Boolean, color: Color) {
-    Canvas(modifier = Modifier.size(16.dp)) {
-        if (isDarkMode) {
-            val center = Offset(size.width * 0.44f, size.height * 0.5f)
-            val radius = size.minDimension * 0.44f
-            val baseCircle = Path().apply {
-                addOval(Rect(center.x - radius, center.y - radius, center.x + radius, center.y + radius))
-            }
-            val cutoutCenter = Offset(center.x + radius * 0.52f, center.y - radius * 0.36f)
-            val cutoutRadius = radius * 0.88f
-            val cutoutCircle = Path().apply {
-                addOval(Rect(cutoutCenter.x - cutoutRadius, cutoutCenter.y - cutoutRadius, cutoutCenter.x + cutoutRadius, cutoutCenter.y + cutoutRadius))
-            }
-            val crescent = Path().apply {
-                op(baseCircle, cutoutCircle, PathOperation.Difference)
-            }
-            drawPath(path = crescent, color = color)
-        } else {
-            val center = Offset(size.width / 2f, size.height / 2f)
-            val centerRadius = size.minDimension * 0.22f
-            drawCircle(color = color, radius = centerRadius, center = center)
-
-            val rayCount = 8
-            val rayInner = size.minDimension * 0.34f
-            val rayOuter = size.minDimension * 0.48f
-            for (i in 0 until rayCount) {
-                val angle = (i * 45f) * (Math.PI / 180f).toFloat()
-                val start = Offset(center.x + rayInner * cos(angle), center.y + rayInner * sin(angle))
-                val end = Offset(center.x + rayOuter * cos(angle), center.y + rayOuter * sin(angle))
-                drawLine(color = color, start = start, end = end, strokeWidth = 1.6.dp.toPx(), cap = StrokeCap.Round)
-            }
-        }
-    }
-}
-
-@Composable
-private fun SlidingModeSelector(
-    currentMode: EngineMode,
-    onModeSelect: (EngineMode) -> Unit
-) {
-    val colors = buniColors
-
-    BoxWithConstraints(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(10.dp))
-            .background(colors.surface)
-            .border(1.dp, colors.border, RoundedCornerShape(10.dp))
-            .padding(4.dp)
-    ) {
-        val tabWidth = maxWidth / 2
-        val targetOffset = if (currentMode == EngineMode.SHIELD) 0.dp else tabWidth
-
-        val indicatorOffset by animateDpAsState(
-            targetValue = targetOffset,
-            animationSpec = spring(
-                dampingRatio = Spring.DampingRatioLowBouncy,
-                stiffness = Spring.StiffnessMediumLow
-            ),
-            label = "pill_slide"
-        )
-
-        Box(
-            modifier = Modifier
-                .offset(x = indicatorOffset)
-                .width(tabWidth)
-                .height(48.dp)
-                .clip(RoundedCornerShape(8.dp))
-                .background(colors.surfaceVariant)
-                .border(1.dp, colors.borderLight, RoundedCornerShape(8.dp))
-        )
-
-        Row(modifier = Modifier.fillMaxWidth()) {
-            ModeTab(
-                title = buniString("shield_tab"),
-                subtitle = buniString("shield_sub"),
-                selected = currentMode == EngineMode.SHIELD,
-                onClick = { onModeSelect(EngineMode.SHIELD) },
-                modifier = Modifier.weight(1f)
-            )
-            ModeTab(
-                title = buniString("tunnel_tab"),
-                subtitle = buniString("tunnel_sub"),
-                selected = currentMode == EngineMode.TUNNEL,
-                onClick = { onModeSelect(EngineMode.TUNNEL) },
-                modifier = Modifier.weight(1f)
-            )
-        }
-    }
-}
-
-@Composable
-private fun ModeTab(
-    title: String,
-    subtitle: String,
-    selected: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val colors = buniColors
-
-    Column(
-        modifier = modifier
-            .height(48.dp)
-            .clip(RoundedCornerShape(8.dp))
-            .background(Color.Transparent)
-            .clickable(onClick = onClick),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
-    ) {
-        Text(
-            text = title,
-            color = if (selected) colors.textPrimary else colors.textMuted,
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Bold,
-            letterSpacing = 1.sp
-        )
-        Text(
-            text = subtitle,
-            color = if (selected) colors.textSecondary else colors.textMuted,
-            fontSize = 10.sp
-        )
-    }
-}
-
-@Composable
 private fun InteractivePowerButton(
     isActive: Boolean,
-    mode: EngineMode,
+    activeDnsLabel: String,
     onToggle: () -> Unit
 ) {
     val colors = buniColors
+    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
     var isPressed by remember { mutableStateOf(false) }
 
     val buttonScale by animateFloatAsState(
@@ -422,6 +240,7 @@ private fun InteractivePowerButton(
                     .pointerInput(Unit) {
                         detectTapGestures(
                             onPress = {
+                                haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
                                 isPressed = true
                                 tryAwaitRelease()
                                 isPressed = false
@@ -452,11 +271,7 @@ private fun InteractivePowerButton(
         Spacer(modifier = Modifier.height(14.dp))
 
         Text(
-            text = if (isActive) {
-                if (mode == EngineMode.SHIELD) buniString("shield_engaged") else buniString("tunnel_engaged")
-            } else {
-                if (mode == EngineMode.SHIELD) buniString("tap_to_shield") else buniString("tap_to_tunnel")
-            },
+            text = if (isActive) buniString("shield_engaged") else buniString("tap_to_shield"),
             color = if (isActive) colors.textPrimary else colors.textMuted,
             fontSize = 11.sp,
             fontFamily = FontFamily.Monospace,
@@ -466,10 +281,10 @@ private fun InteractivePowerButton(
         Spacer(modifier = Modifier.height(4.dp))
 
         Text(
-            text = if (mode == EngineMode.SHIELD) {
-                buniString("shield_desc")
+            text = if (isActive) {
+                "Direct WAN · Local DNS Sinkhole · $activeDnsLabel"
             } else {
-                buniString("tunnel_desc")
+                "Direct WAN · Standby · $activeDnsLabel"
             },
             color = colors.textMuted,
             fontSize = 10.sp,
@@ -635,5 +450,75 @@ private fun StatItem(label: String, value: String) {
             fontFamily = FontFamily.Monospace,
             fontWeight = FontWeight.Bold
         )
+    }
+}
+
+@Composable
+private fun PrivateDnsWarningCard(
+    currentLanguage: Language,
+    onOpenSettings: () -> Unit
+) {
+    val colors = buniColors
+    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(colors.surface)
+            .border(1.dp, Color(0xFFF59E0B).copy(alpha = 0.4f), RoundedCornerShape(14.dp))
+            .padding(16.dp)
+    ) {
+        Column {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(8.dp)
+                        .clip(CircleShape)
+                        .background(Color(0xFFF59E0B))
+                )
+                Text(
+                    text = dev.buni.core.BuniStrings.get("private_dns_warning_title", currentLanguage),
+                    color = colors.textPrimary,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = FontFamily.Monospace
+                )
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Text(
+                text = dev.buni.core.BuniStrings.get("private_dns_warning_desc", currentLanguage),
+                color = colors.textSecondary,
+                fontSize = 11.sp,
+                lineHeight = 16.sp
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(colors.surfaceVariant)
+                    .border(1.dp, colors.borderLight, RoundedCornerShape(8.dp))
+                    .clickable {
+                        haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                        onOpenSettings()
+                    }
+                    .padding(horizontal = 12.dp, vertical = 6.dp)
+            ) {
+                Text(
+                    text = dev.buni.core.BuniStrings.get("private_dns_warning_action", currentLanguage),
+                    color = colors.textPrimary,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    fontFamily = FontFamily.Monospace
+                )
+            }
+        }
     }
 }
