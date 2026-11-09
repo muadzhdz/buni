@@ -44,6 +44,12 @@ class BuniVpnService : VpnService() {
         when (action) {
             ACTION_CONNECT -> startVpn()
             ACTION_DISCONNECT -> stopVpn()
+            ACTION_RELOAD_RULES -> {
+                loadBlocklist()
+                val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
+                val now = timeFormat.format(Date())
+                emitLog("[$now] Ruleset updated: ${blockedDomains.size} domains active")
+            }
         }
         return START_STICKY
     }
@@ -53,14 +59,29 @@ class BuniVpnService : VpnService() {
         try {
             assets.open("blocklist.txt").bufferedReader().useLines { lines ->
                 lines.forEach { line ->
-                    val clean = line.trim().lowercase(Locale.ROOT)
-                    if (clean.isNotEmpty() && !clean.startsWith("#")) {
+                    val clean = dev.buni.core.DnsEngine.cleanDomainLine(line)
+                    if (clean != null) {
                         blockedDomains.add(clean)
                     }
                 }
             }
         } catch (ignored: Exception) {
         }
+        try {
+            val otaFile = java.io.File(filesDir, "blocklist_ota.txt")
+            if (otaFile.exists()) {
+                otaFile.bufferedReader().useLines { lines ->
+                    lines.forEach { line ->
+                        val clean = dev.buni.core.DnsEngine.cleanDomainLine(line)
+                        if (clean != null) {
+                            blockedDomains.add(clean)
+                        }
+                    }
+                }
+            }
+        } catch (ignored: Exception) {
+        }
+        _activeRulesCount.value = blockedDomains.size
     }
 
     private fun startVpn() {
@@ -77,7 +98,7 @@ class BuniVpnService : VpnService() {
             val statusTitle = dev.buni.core.BuniStrings.get("notif_shield_active", lang)
             val statusDesc = dev.buni.core.BuniStrings.get("notif_shield_desc", lang)
             val notification = buildNotification(statusTitle, statusDesc)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
                 startForeground(
                     NOTIFICATION_ID,
                     notification,
@@ -95,6 +116,9 @@ class BuniVpnService : VpnService() {
             addAddress("10.233.0.1", 30)
             addDnsServer("10.233.0.2")
             addRoute("10.233.0.2", 32)
+            addAddress("fd00:1:fd00:1::1", 128)
+            addDnsServer("fd00:1:fd00:1::2")
+            addRoute("fd00:1:fd00:1::2", 128)
             setBlocking(true)
 
             val whitelisted = settings.getWhitelistedPackages()
@@ -154,35 +178,59 @@ class BuniVpnService : VpnService() {
 
                 val packetCopy = buffer.copyOf(length)
                 val version = (packetCopy[0].toInt() shr 4) and 0x0F
-                if (version != 4) {
-                    continue
-                }
+                if (version == 4) {
+                    val ihl = (packetCopy[0].toInt() and 0x0F) * 4
+                    if (packetCopy.size < ihl + 8) {
+                        continue
+                    }
 
-                val ihl = (packetCopy[0].toInt() and 0x0F) * 4
-                if (packetCopy.size < ihl + 8) {
-                    continue
-                }
+                    val protocol = packetCopy[9].toInt() and 0xFF
+                    if (protocol != 17) {
+                        continue
+                    }
 
-                val protocol = packetCopy[9].toInt() and 0xFF
-                if (protocol != 17) {
-                    continue
-                }
+                    val dstPort = ((packetCopy[ihl + 2].toInt() and 0xFF) shl 8) or (packetCopy[ihl + 3].toInt() and 0xFF)
+                    if (dstPort != 53) {
+                        continue
+                    }
 
-                val dstPort = ((packetCopy[ihl + 2].toInt() and 0xFF) shl 8) or (packetCopy[ihl + 3].toInt() and 0xFF)
-                if (dstPort != 53) {
-                    continue
-                }
+                    val udpLen = ((packetCopy[ihl + 4].toInt() and 0xFF) shl 8) or (packetCopy[ihl + 5].toInt() and 0xFF)
+                    if (packetCopy.size < ihl + udpLen || udpLen < 8) {
+                        continue
+                    }
 
-                val udpLen = ((packetCopy[ihl + 4].toInt() and 0xFF) shl 8) or (packetCopy[ihl + 5].toInt() and 0xFF)
-                if (packetCopy.size < ihl + udpLen || udpLen < 8) {
-                    continue
-                }
+                    val dnsPayload = packetCopy.copyOfRange(ihl + 8, ihl + udpLen)
+                    totalQueries.incrementAndGet()
 
-                val dnsPayload = packetCopy.copyOfRange(ihl + 8, ihl + udpLen)
-                totalQueries.incrementAndGet()
+                    serviceScope.launch(Dispatchers.IO) {
+                        processDnsPacket(packetCopy, ihl, dnsPayload, outStream, writeLock)
+                    }
+                } else if (version == 6) {
+                    if (packetCopy.size < 48) {
+                        continue
+                    }
 
-                serviceScope.launch(Dispatchers.IO) {
-                    processDnsPacket(packetCopy, ihl, dnsPayload, outStream, writeLock)
+                    val nextHeader = packetCopy[6].toInt() and 0xFF
+                    if (nextHeader != 17) {
+                        continue
+                    }
+
+                    val dstPort = ((packetCopy[42].toInt() and 0xFF) shl 8) or (packetCopy[43].toInt() and 0xFF)
+                    if (dstPort != 53) {
+                        continue
+                    }
+
+                    val udpLen = ((packetCopy[44].toInt() and 0xFF) shl 8) or (packetCopy[45].toInt() and 0xFF)
+                    if (packetCopy.size < 40 + udpLen || udpLen < 8) {
+                        continue
+                    }
+
+                    val dnsPayload = packetCopy.copyOfRange(48, 40 + udpLen)
+                    totalQueries.incrementAndGet()
+
+                    serviceScope.launch(Dispatchers.IO) {
+                        processDnsPacketIpv6(packetCopy, dnsPayload, outStream, writeLock)
+                    }
                 }
 
             } catch (e: Exception) {
@@ -200,16 +248,24 @@ class BuniVpnService : VpnService() {
         outStream: FileOutputStream,
         writeLock: Any
     ) {
-        val domain = parseDomainFromDns(dnsPayload)
+        val domain = dev.buni.core.DnsEngine.parseDomain(dnsPayload)
         val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
         val now = timeFormat.format(Date())
         val settings = dev.buni.core.BuniSettings(this)
 
-        if (domain.isNotEmpty() && isDomainBlocked(domain, settings)) {
+        val isBlocked = domain.isNotEmpty() && dev.buni.core.DnsEngine.isDomainBlocked(
+            domain,
+            blockedDomains,
+            settings.isFilterAdsEnabled(),
+            settings.isFilterTrackersEnabled(),
+            settings.isFilterMalwareEnabled()
+        )
+
+        if (isBlocked) {
             blockedQueries.incrementAndGet()
-            val sinkReply = buildSinkholeDnsResponse(dnsPayload)
+            val sinkReply = dev.buni.core.DnsEngine.buildSinkholeResponse(dnsPayload)
             if (sinkReply != null) {
-                val replyPacket = craftIPv4UdpReply(packet, ihl, sinkReply)
+                val replyPacket = dev.buni.core.DnsEngine.craftReplyPacket(packet, ihl, sinkReply)
                 synchronized(writeLock) {
                     try {
                         outStream.write(replyPacket)
@@ -225,7 +281,68 @@ class BuniVpnService : VpnService() {
             lastLatency.set(duration)
 
             if (upstreamReply != null && upstreamReply.isNotEmpty()) {
-                val replyPacket = craftIPv4UdpReply(packet, ihl, upstreamReply)
+                val replyPacket = dev.buni.core.DnsEngine.craftReplyPacket(packet, ihl, upstreamReply)
+                synchronized(writeLock) {
+                    try {
+                        outStream.write(replyPacket)
+                    } catch (ignored: Exception) {
+                    }
+                }
+                val displayDomain = if (domain.isNotEmpty()) domain else "dns.query"
+                emitLog("[$now] PASS $displayDomain -> RESOLVED (${duration}ms)")
+            } else {
+                val displayDomain = if (domain.isNotEmpty()) domain else "dns.query"
+                emitLog("[$now] PASS $displayDomain -> TIMEOUT")
+            }
+        }
+
+        _statsFlow.value = Triple(
+            totalQueries.get(),
+            blockedQueries.get(),
+            lastLatency.get()
+        )
+    }
+
+    private fun processDnsPacketIpv6(
+        packet: ByteArray,
+        dnsPayload: ByteArray,
+        outStream: FileOutputStream,
+        writeLock: Any
+    ) {
+        val domain = dev.buni.core.DnsEngine.parseDomain(dnsPayload)
+        val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
+        val now = timeFormat.format(Date())
+        val settings = dev.buni.core.BuniSettings(this)
+
+        val isBlocked = domain.isNotEmpty() && dev.buni.core.DnsEngine.isDomainBlocked(
+            domain,
+            blockedDomains,
+            settings.isFilterAdsEnabled(),
+            settings.isFilterTrackersEnabled(),
+            settings.isFilterMalwareEnabled()
+        )
+
+        if (isBlocked) {
+            blockedQueries.incrementAndGet()
+            val sinkReply = dev.buni.core.DnsEngine.buildSinkholeResponse(dnsPayload)
+            if (sinkReply != null) {
+                val replyPacket = dev.buni.core.DnsEngine.craftReplyPacketIpv6(packet, sinkReply)
+                synchronized(writeLock) {
+                    try {
+                        outStream.write(replyPacket)
+                    } catch (ignored: Exception) {
+                    }
+                }
+            }
+            emitLog("[$now] SINK $domain -> DROPPED (0ms)")
+        } else {
+            val start = System.currentTimeMillis()
+            val upstreamReply = forwardDnsProtected(dnsPayload)
+            val duration = System.currentTimeMillis() - start
+            lastLatency.set(duration)
+
+            if (upstreamReply != null && upstreamReply.isNotEmpty()) {
+                val replyPacket = dev.buni.core.DnsEngine.craftReplyPacketIpv6(packet, upstreamReply)
                 synchronized(writeLock) {
                     try {
                         outStream.write(replyPacket)
@@ -383,253 +500,6 @@ class BuniVpnService : VpnService() {
         }
     }
 
-    private fun isDomainBlocked(domain: String, settings: dev.buni.core.BuniSettings): Boolean {
-        val d = domain.lowercase(Locale.ROOT)
-        val matched = findMatchingBlockedDomain(d) ?: return false
-        val category = classifyDomain(matched)
-        return when (category) {
-            DomainCategory.ADS -> settings.isFilterAdsEnabled()
-            DomainCategory.TRACKERS -> settings.isFilterTrackersEnabled()
-            DomainCategory.MALWARE -> settings.isFilterMalwareEnabled()
-        }
-    }
-
-    private fun findMatchingBlockedDomain(domain: String): String? {
-        if (blockedDomains.contains(domain)) {
-            return domain
-        }
-        var sub = domain
-        while (true) {
-            val idx = sub.indexOf('.')
-            if (idx == -1) {
-                break
-            }
-            sub = sub.substring(idx + 1)
-            if (blockedDomains.contains(sub)) {
-                return sub
-            }
-        }
-        return null
-    }
-
-    private enum class DomainCategory {
-        ADS,
-        TRACKERS,
-        MALWARE
-    }
-
-    private fun classifyDomain(domain: String): DomainCategory {
-        val lower = domain.lowercase(Locale.ROOT)
-        if (lower.contains("malware") || lower.contains("phish") || lower.contains("sec.miui") || lower.contains("installer") || lower.contains("diagmon")) {
-            return DomainCategory.MALWARE
-        }
-        if (lower.contains("track") || lower.contains("telemetry") || lower.contains("metric") || lower.contains("stat") || lower.contains("analytics") || lower.contains("log") || lower.contains("appsflyer") || lower.contains("adjust") || lower.contains("branch.io") || lower.contains("pixel")) {
-            return DomainCategory.TRACKERS
-        }
-        return DomainCategory.ADS
-    }
-
-    private fun parseDomainFromDns(wire: ByteArray): String {
-        if (wire.size < 12) {
-            return ""
-        }
-        var offset = 12
-        val labels = ArrayList<String>()
-
-        while (offset < wire.size) {
-            val len = wire[offset].toInt() and 0xFF
-            offset++
-            if (len == 0) {
-                break
-            }
-            if (len > 63 || offset + len > wire.size) {
-                return ""
-            }
-            labels.add(String(wire, offset, len, Charsets.US_ASCII))
-            offset += len
-        }
-
-        return labels.joinToString(".")
-    }
-
-    private fun buildSinkholeDnsResponse(query: ByteArray): ByteArray? {
-        if (query.size < 12) {
-            return null
-        }
-        var offset = 12
-        while (offset < query.size) {
-            val len = query[offset].toInt() and 0xFF
-            offset++
-            if (len == 0) {
-                break
-            }
-            offset += len
-        }
-        if (offset + 4 > query.size) {
-            return null
-        }
-        val qType = ((query[offset].toInt() and 0xFF) shl 8) or (query[offset + 1].toInt() and 0xFF)
-        val questionEnd = offset + 4
-
-        val isA = (qType == 1)
-        val isAaaa = (qType == 28)
-
-        val recordLen = when {
-            isA -> 16
-            isAaaa -> 28
-            else -> 0
-        }
-
-        val resp = ByteArray(questionEnd + recordLen)
-        System.arraycopy(query, 0, resp, 0, questionEnd)
-
-        var flags = ((resp[2].toInt() and 0xFF) shl 8) or (resp[3].toInt() and 0xFF)
-        flags = flags or 0x8400
-        flags = flags and 0xFFF0.inv()
-        resp[2] = ((flags shr 8) and 0xFF).toByte()
-        resp[3] = (flags and 0xFF).toByte()
-
-        resp[4] = 0x00
-        resp[5] = 0x01
-        resp[6] = 0x00
-        resp[7] = if (recordLen > 0) 0x01.toByte() else 0x00.toByte()
-        resp[8] = 0x00
-        resp[9] = 0x00
-        resp[10] = 0x00
-        resp[11] = 0x00
-
-        if (isA) {
-            var idx = questionEnd
-            resp[idx++] = 0xC0.toByte()
-            resp[idx++] = 0x0C.toByte()
-            resp[idx++] = 0x00.toByte()
-            resp[idx++] = 0x01.toByte()
-            resp[idx++] = 0x00.toByte()
-            resp[idx++] = 0x01.toByte()
-            resp[idx++] = 0x00.toByte()
-            resp[idx++] = 0x00.toByte()
-            resp[idx++] = 0x01.toByte()
-            resp[idx++] = 0x2C.toByte()
-            resp[idx++] = 0x00.toByte()
-            resp[idx++] = 0x04.toByte()
-            resp[idx++] = 0.toByte()
-            resp[idx++] = 0.toByte()
-            resp[idx++] = 0.toByte()
-            resp[idx++] = 0.toByte()
-        } else if (isAaaa) {
-            var idx = questionEnd
-            resp[idx++] = 0xC0.toByte()
-            resp[idx++] = 0x0C.toByte()
-            resp[idx++] = 0x00.toByte()
-            resp[idx++] = 0x1C.toByte()
-            resp[idx++] = 0x00.toByte()
-            resp[idx++] = 0x01.toByte()
-            resp[idx++] = 0x00.toByte()
-            resp[idx++] = 0x00.toByte()
-            resp[idx++] = 0x01.toByte()
-            resp[idx++] = 0x2C.toByte()
-            resp[idx++] = 0x00.toByte()
-            resp[idx++] = 0x10.toByte()
-            for (i in 0 until 16) {
-                resp[idx++] = 0.toByte()
-            }
-        }
-
-        return resp
-    }
-
-    private fun craftIPv4UdpReply(req: ByteArray, ihl: Int, payload: ByteArray): ByteArray {
-        val totalLen = 20 + 8 + payload.size
-        val reply = ByteArray(totalLen)
-
-        reply[0] = 0x45.toByte()
-        reply[1] = 0x00.toByte()
-        reply[2] = ((totalLen shr 8) and 0xFF).toByte()
-        reply[3] = (totalLen and 0xFF).toByte()
-        reply[4] = 0x00.toByte()
-        reply[5] = 0x00.toByte()
-        reply[6] = 0x40.toByte()
-        reply[7] = 0x00.toByte()
-        reply[8] = 64.toByte()
-        reply[9] = 17.toByte()
-        reply[10] = 0x00.toByte()
-        reply[11] = 0x00.toByte()
-
-        System.arraycopy(req, 16, reply, 12, 4)
-        System.arraycopy(req, 12, reply, 16, 4)
-
-        val ipCsum = calculateChecksum(reply, 0, 20)
-        reply[10] = ((ipCsum shr 8) and 0xFF).toByte()
-        reply[11] = (ipCsum and 0xFF).toByte()
-
-        reply[20] = req[ihl + 2]
-        reply[21] = req[ihl + 3]
-        reply[22] = req[ihl]
-        reply[23] = req[ihl + 1]
-
-        val udpLen = 8 + payload.size
-        reply[24] = ((udpLen shr 8) and 0xFF).toByte()
-        reply[25] = (udpLen and 0xFF).toByte()
-        reply[26] = 0x00.toByte()
-        reply[27] = 0x00.toByte()
-
-        System.arraycopy(payload, 0, reply, 28, payload.size)
-
-        val udpCsum = calculateUdpChecksum(reply, 12, 16, 20, udpLen)
-        reply[26] = ((udpCsum shr 8) and 0xFF).toByte()
-        reply[27] = (udpCsum and 0xFF).toByte()
-
-        return reply
-    }
-
-    private fun calculateChecksum(data: ByteArray, offset: Int, length: Int): Int {
-        var sum = 0L
-        var i = offset
-        while (i < offset + length - 1) {
-            val word = ((data[i].toInt() and 0xFF) shl 8) or (data[i + 1].toInt() and 0xFF)
-            sum += word
-            i += 2
-        }
-        if (i < offset + length) {
-            sum += (data[i].toInt() and 0xFF) shl 8
-        }
-        while (sum shr 16 > 0) {
-            sum = (sum and 0xFFFF) + (sum shr 16)
-        }
-        return sum.inv().toInt() and 0xFFFF
-    }
-
-    private fun calculateUdpChecksum(
-        data: ByteArray,
-        srcOffset: Int,
-        dstOffset: Int,
-        udpOffset: Int,
-        udpLen: Int
-    ): Int {
-        var sum = 0L
-        sum += ((data[srcOffset].toInt() and 0xFF) shl 8) or (data[srcOffset + 1].toInt() and 0xFF)
-        sum += ((data[srcOffset + 2].toInt() and 0xFF) shl 8) or (data[srcOffset + 3].toInt() and 0xFF)
-        sum += ((data[dstOffset].toInt() and 0xFF) shl 8) or (data[dstOffset + 1].toInt() and 0xFF)
-        sum += ((data[dstOffset + 2].toInt() and 0xFF) shl 8) or (data[dstOffset + 3].toInt() and 0xFF)
-        sum += 17L
-        sum += udpLen.toLong()
-
-        var i = udpOffset
-        while (i < udpOffset + udpLen - 1) {
-            val word = ((data[i].toInt() and 0xFF) shl 8) or (data[i + 1].toInt() and 0xFF)
-            sum += word
-            i += 2
-        }
-        if (i < udpOffset + udpLen) {
-            sum += (data[i].toInt() and 0xFF) shl 8
-        }
-        while (sum shr 16 > 0) {
-            sum = (sum and 0xFFFF) + (sum shr 16)
-        }
-        val res = sum.inv().toInt() and 0xFFFF
-        return if (res == 0) 0xFFFF else res
-    }
-
     private fun emitLog(line: String) {
         val current = _logsFlow.value
         _logsFlow.value = (current + line).takeLast(50)
@@ -662,6 +532,7 @@ class BuniVpnService : VpnService() {
     companion object {
         const val ACTION_CONNECT = "dev.buni.action.CONNECT"
         const val ACTION_DISCONNECT = "dev.buni.action.DISCONNECT"
+        const val ACTION_RELOAD_RULES = "dev.buni.action.RELOAD_RULES"
         private const val NOTIFICATION_ID = 2331
 
         private val _isRunning = MutableStateFlow(false)
@@ -672,5 +543,8 @@ class BuniVpnService : VpnService() {
 
         private val _logsFlow = MutableStateFlow<List<String>>(emptyList())
         val logsFlow = _logsFlow.asStateFlow()
+
+        private val _activeRulesCount = MutableStateFlow(165)
+        val activeRulesCount = _activeRulesCount.asStateFlow()
     }
 }

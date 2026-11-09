@@ -54,10 +54,12 @@ fun AppShell(
     isDarkMode: Boolean,
     currentThemeMode: ThemeMode,
     currentLanguage: Language,
+    activeDnsLabel: String,
     onThemeModeChange: (ThemeMode) -> Unit,
     onToggleTheme: () -> Unit,
     onToggleLanguage: () -> Unit,
-    onTogglePower: () -> Unit
+    onTogglePower: () -> Unit,
+    onDnsChanged: () -> Unit
 ) {
     var showingAbout by remember { mutableStateOf(false) }
 
@@ -87,7 +89,8 @@ fun AppShell(
     ) {
         FluxHeader(
             currentPage = pagerState.currentPage,
-            isActive = isActive
+            isActive = isActive,
+            activeDnsLabel = activeDnsLabel
         )
 
         Box(
@@ -105,6 +108,7 @@ fun AppShell(
                         stats = stats,
                         logs = logs,
                         isDarkMode = isDarkMode,
+                        activeDnsLabel = activeDnsLabel,
                         currentLanguage = currentLanguage,
                         onToggleTheme = onToggleTheme,
                         onToggleLanguage = onToggleLanguage,
@@ -116,6 +120,7 @@ fun AppShell(
                         currentLanguage = currentLanguage,
                         onThemeModeChange = onThemeModeChange,
                         onToggleLanguage = onToggleLanguage,
+                        onDnsChanged = onDnsChanged,
                         onOpenAbout = { showingAbout = true }
                     )
                 }
@@ -138,7 +143,8 @@ fun AppShell(
 @Composable
 private fun FluxHeader(
     currentPage: Int,
-    isActive: Boolean
+    isActive: Boolean,
+    activeDnsLabel: String
 ) {
     val colors = buniColors
 
@@ -194,7 +200,7 @@ private fun FluxHeader(
                         else -> buniString("hdr_settings_title")
                     }
                     val subtitle = when (currentPage) {
-                        0 -> if (isActive) buniString("hdr_shield_sub_active") else buniString("hdr_shield_sub_idle")
+                        0 -> if (isActive) "active · direct wan · $activeDnsLabel" else "idle · standby · $activeDnsLabel"
                         1 -> buniString("hdr_apps_sub")
                         else -> buniString("hdr_settings_sub")
                     }

@@ -28,6 +28,15 @@ object BuniStrings {
         }
     }
 
+    fun getSupportedKeys(): Set<String> = enStrings.keys
+
+    fun hasKey(key: String, lang: Language): Boolean {
+        return when (lang) {
+            Language.EN -> enStrings.containsKey(key)
+            Language.ID -> idStrings.containsKey(key)
+        }
+    }
+
     private val enStrings = mapOf(
         "app_tagline" to "the hidden network shield",
         "standby" to "STANDBY",
@@ -121,7 +130,47 @@ object BuniStrings {
         "btn_check" to "CHECK",
         "notif_shield_active" to "Shield Active",
         "notif_shield_desc" to "Shielding network traffic",
-        "log_shield_active" to "SHIELD Local DNS Sinkhole Active"
+        "log_shield_active" to "SHIELD Local DNS Sinkhole Active",
+        "vpn_disclosure_title" to "Local Network Shield",
+        "vpn_disclosure_desc" to "Buni uses Android VpnService to create an on-device local network shield (10.233.0.1/30). This intercepts DNS port 53 traffic locally to block ads, trackers, and telemetry before they leave your device.\n\nNo browsing history or personal data is collected, monitored, or transmitted to any external server.",
+        "vpn_disclosure_accept" to "ENABLE SHIELD",
+        "vpn_disclosure_cancel" to "CANCEL",
+        "ruleset_title" to "Domain Blocklist Ruleset",
+        "ruleset_desc" to "Sync latest tracker and ad telemetries via OTA",
+        "ruleset_updated_never" to "Never updated",
+        "ruleset_updated_at" to "Updated",
+        "ruleset_rules_count" to "active rules",
+        "btn_update_ruleset" to "SYNC",
+        "updating_ruleset" to "Syncing ruleset...",
+        "ruleset_sync_success" to "Ruleset synchronized successfully",
+        "ruleset_sync_failed" to "Failed to sync ruleset",
+        "dns_custom_title" to "Custom Resolver",
+        "dns_custom_desc" to "Point queries to your own NextDNS or Pi-hole server",
+        "custom_dns_hint" to "Enter IPv4 address (e.g. 45.90.28.0)",
+        "custom_dns_apply" to "APPLY",
+        "custom_dns_valid" to "Custom DNS saved",
+        "custom_dns_invalid" to "Invalid IPv4 address",
+        "dialog_confirm_title" to "Confirmation",
+        "dialog_yes" to "YES",
+        "dialog_no" to "CANCEL",
+        "confirm_toggle_ads_title" to "Ad Network Filtering",
+        "confirm_toggle_ads_desc_enable" to "Enable blocking for ad networks (AdMob, DoubleClick, UnityAds, etc.)?",
+        "confirm_toggle_ads_desc_disable" to "Disable blocking for ad networks? Ads and marketing popups will be permitted.",
+        "confirm_toggle_trackers_title" to "Mobile Telemetry & Trackers",
+        "confirm_toggle_trackers_desc_enable" to "Enable blocking for OEM telemetry and analytics trackers?",
+        "confirm_toggle_trackers_desc_disable" to "Disable blocking for mobile telemetry? Device tracking and metric beacons will be permitted.",
+        "confirm_toggle_malware_title" to "Malware & Phishing Protection",
+        "confirm_toggle_malware_desc_enable" to "Enable protection against malicious domains, installers, and phishing?",
+        "confirm_toggle_malware_desc_disable" to "Disable malware protection? Caution: Malicious and deceptive domains will not be blocked.",
+        "confirm_change_dns_title" to "Upstream DNS Resolver",
+        "confirm_change_dns_desc" to "Switch upstream DNS resolver to %1\$s? Permitted queries will be forwarded to this address.",
+        "confirm_app_bypass_title" to "Bypass Application",
+        "confirm_app_bypass_desc" to "Bypass %1\$s from Buni shield? Its traffic will route directly over cellular or Wi-Fi without filtering.",
+        "confirm_app_shield_title" to "Shield Application",
+        "confirm_app_shield_desc" to "Re-enable Buni shield protection for %1\$s? Its network queries will be filtered by the local sinkhole.",
+        "private_dns_warning_title" to "Private DNS Active",
+        "private_dns_warning_desc" to "Android Private DNS (DoT) may bypass local shield. To block 100% of ads and OEM trackers, set Private DNS to 'Off' in Android Settings.",
+        "private_dns_warning_action" to "Configure in Settings"
     )
 
     private val idStrings = mapOf(
@@ -217,6 +266,46 @@ object BuniStrings {
         "btn_check" to "PERIKSA",
         "notif_shield_active" to "Perisai Aktif",
         "notif_shield_desc" to "Mengamankan lalu lintas jaringan",
-        "log_shield_active" to "PERISAI Sinkhole DNS Lokal Aktif"
+        "log_shield_active" to "PERISAI Sinkhole DNS Lokal Aktif",
+        "vpn_disclosure_title" to "Perisai Jaringan Lokal",
+        "vpn_disclosure_desc" to "Buni menggunakan Android VpnService untuk membuat perisai jaringan lokal langsung di perangkat (10.233.0.1/30). Perisai ini mencegat kueri DNS port 53 untuk memblokir iklan, pelacak, dan telemetri sebelum keluar dari ponsel Anda.\n\nTidak ada riwayat penjelajahan atau data pribadi yang dikumpulkan, dipantau, atau dikirimkan ke server eksternal mana pun.",
+        "vpn_disclosure_accept" to "AKTIFKAN PERISAI",
+        "vpn_disclosure_cancel" to "BATAL",
+        "ruleset_title" to "Aturan Daftar Blokir Domain",
+        "ruleset_desc" to "Sinkronisasi telemetri iklan dan pelacak via OTA",
+        "ruleset_updated_never" to "Belum pernah diperbarui",
+        "ruleset_updated_at" to "Diperbarui",
+        "ruleset_rules_count" to "aturan aktif",
+        "btn_update_ruleset" to "SINKRON",
+        "updating_ruleset" to "Menyinkronkan aturan...",
+        "ruleset_sync_success" to "Aturan blokir berhasil disinkronkan",
+        "ruleset_sync_failed" to "Gagal menyinkronkan aturan",
+        "dns_custom_title" to "Resolver Kustom",
+        "dns_custom_desc" to "Arahkan kueri ke server NextDNS atau Pi-hole pribadi",
+        "custom_dns_hint" to "Masukkan alamat IPv4 (cth. 45.90.28.0)",
+        "custom_dns_apply" to "TERAPKAN",
+        "custom_dns_valid" to "DNS Kustom tersimpan",
+        "custom_dns_invalid" to "Alamat IPv4 tidak valid",
+        "dialog_confirm_title" to "Konfirmasi",
+        "dialog_yes" to "YA",
+        "dialog_no" to "BATAL",
+        "confirm_toggle_ads_title" to "Penyaringan Jaringan Iklan",
+        "confirm_toggle_ads_desc_enable" to "Aktifkan pemblokiran untuk jaringan iklan (AdMob, DoubleClick, UnityAds, dll)?",
+        "confirm_toggle_ads_desc_disable" to "Nonaktifkan pemblokiran jaringan iklan? Iklan dan popup pemasaran akan diizinkan.",
+        "confirm_toggle_trackers_title" to "Telemetri & Pelacak Seluler",
+        "confirm_toggle_trackers_desc_enable" to "Aktifkan pemblokiran untuk telemetri perangkat dan pelacak analitik?",
+        "confirm_toggle_trackers_desc_disable" to "Nonaktifkan pemblokiran telemetri seluler? Pelacakan perangkat dan pengiriman data metrik akan diizinkan.",
+        "confirm_toggle_malware_title" to "Perlindungan Malware & Phishing",
+        "confirm_toggle_malware_desc_enable" to "Aktifkan perlindungan terhadap domain berbahaya, installer, dan phishing?",
+        "confirm_toggle_malware_desc_disable" to "Nonaktifkan perlindungan malware? Peringatan: Domain berbahaya dan penipuan tidak akan dicegat.",
+        "confirm_change_dns_title" to "Resolver DNS Upstream",
+        "confirm_change_dns_desc" to "Ganti resolver DNS upstream ke %1\$s? Kueri yang diizinkan akan diteruskan ke alamat ini.",
+        "confirm_app_bypass_title" to "Kecualikan Aplikasi",
+        "confirm_app_bypass_desc" to "Kecualikan %1\$s dari perisai Buni? Lalu lintas aplikasi ini akan langsung melewati koneksi seluler atau Wi-Fi tanpa disaring.",
+        "confirm_app_shield_title" to "Lindungi Aplikasi",
+        "confirm_app_shield_desc" to "Aktifkan kembali perlindungan perisai Buni untuk %1\$s? Kueri jaringannya akan disaring oleh sinkhole lokal.",
+        "private_dns_warning_title" to "Private DNS Masih Aktif",
+        "private_dns_warning_desc" to "Fitur Private DNS Android (DoT) dapat membocorkan kueri lewat port 853. Agar seluruh iklan dan tracker OEM terblokir 100%, matikan Private DNS ('Off') di Pengaturan Android.",
+        "private_dns_warning_action" to "Buka Pengaturan"
     )
 }

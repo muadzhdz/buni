@@ -70,6 +70,7 @@ fun DashboardScreen(
     stats: Triple<Long, Long, Long>,
     logs: List<String>,
     isDarkMode: Boolean,
+    activeDnsLabel: String,
     currentLanguage: Language,
     onToggleTheme: () -> Unit,
     onToggleLanguage: () -> Unit,
@@ -77,6 +78,36 @@ fun DashboardScreen(
 ) {
     val scrollState = rememberScrollState()
     val colors = buniColors
+    val context = androidx.compose.ui.platform.LocalContext.current
+
+    var privateDnsMode by remember {
+        mutableStateOf(
+            try {
+                android.provider.Settings.Global.getString(context.contentResolver, "private_dns_mode") ?: "off"
+            } catch (e: Exception) {
+                "off"
+            }
+        )
+    }
+
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    androidx.compose.runtime.DisposableEffect(lifecycleOwner) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+                privateDnsMode = try {
+                    android.provider.Settings.Global.getString(context.contentResolver, "private_dns_mode") ?: "off"
+                } catch (e: Exception) {
+                    "off"
+                }
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
+
+    val isPrivateDnsActive = privateDnsMode != "off" && privateDnsMode != "unknown"
 
     Column(
         modifier = Modifier
@@ -91,7 +122,32 @@ fun DashboardScreen(
         ) {
             InteractivePowerButton(
                 isActive = isActive,
+                activeDnsLabel = activeDnsLabel,
                 onToggle = onTogglePower
+            )
+        }
+
+        if (isPrivateDnsActive) {
+            Spacer(modifier = Modifier.height(16.dp))
+            PrivateDnsWarningCard(
+                currentLanguage = currentLanguage,
+                onOpenSettings = {
+                    try {
+                        val intent = android.content.Intent("android.settings.NETWORK_PROVIDER_SETTINGS")
+                        intent.flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK
+                        context.startActivity(intent)
+                    } catch (e: Exception) {
+                        try {
+                            val fallbackIntent = android.content.Intent(android.provider.Settings.ACTION_WIRELESS_SETTINGS)
+                            fallbackIntent.flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK
+                            context.startActivity(fallbackIntent)
+                        } catch (e2: Exception) {
+                            val appSettings = android.content.Intent(android.provider.Settings.ACTION_SETTINGS)
+                            appSettings.flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK
+                            context.startActivity(appSettings)
+                        }
+                    }
+                }
             )
         }
 
@@ -111,9 +167,11 @@ fun DashboardScreen(
 @Composable
 private fun InteractivePowerButton(
     isActive: Boolean,
+    activeDnsLabel: String,
     onToggle: () -> Unit
 ) {
     val colors = buniColors
+    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
     var isPressed by remember { mutableStateOf(false) }
 
     val buttonScale by animateFloatAsState(
@@ -182,6 +240,7 @@ private fun InteractivePowerButton(
                     .pointerInput(Unit) {
                         detectTapGestures(
                             onPress = {
+                                haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
                                 isPressed = true
                                 tryAwaitRelease()
                                 isPressed = false
@@ -222,7 +281,11 @@ private fun InteractivePowerButton(
         Spacer(modifier = Modifier.height(4.dp))
 
         Text(
-            text = buniString("shield_desc"),
+            text = if (isActive) {
+                "Direct WAN · Local DNS Sinkhole · $activeDnsLabel"
+            } else {
+                "Direct WAN · Standby · $activeDnsLabel"
+            },
             color = colors.textMuted,
             fontSize = 10.sp,
             fontFamily = FontFamily.Monospace
@@ -387,5 +450,75 @@ private fun StatItem(label: String, value: String) {
             fontFamily = FontFamily.Monospace,
             fontWeight = FontWeight.Bold
         )
+    }
+}
+
+@Composable
+private fun PrivateDnsWarningCard(
+    currentLanguage: Language,
+    onOpenSettings: () -> Unit
+) {
+    val colors = buniColors
+    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(colors.surface)
+            .border(1.dp, Color(0xFFF59E0B).copy(alpha = 0.4f), RoundedCornerShape(14.dp))
+            .padding(16.dp)
+    ) {
+        Column {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(8.dp)
+                        .clip(CircleShape)
+                        .background(Color(0xFFF59E0B))
+                )
+                Text(
+                    text = dev.buni.core.BuniStrings.get("private_dns_warning_title", currentLanguage),
+                    color = colors.textPrimary,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = FontFamily.Monospace
+                )
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Text(
+                text = dev.buni.core.BuniStrings.get("private_dns_warning_desc", currentLanguage),
+                color = colors.textSecondary,
+                fontSize = 11.sp,
+                lineHeight = 16.sp
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(colors.surfaceVariant)
+                    .border(1.dp, colors.borderLight, RoundedCornerShape(8.dp))
+                    .clickable {
+                        haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                        onOpenSettings()
+                    }
+                    .padding(horizontal = 12.dp, vertical = 6.dp)
+            ) {
+                Text(
+                    text = dev.buni.core.BuniStrings.get("private_dns_warning_action", currentLanguage),
+                    color = colors.textPrimary,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    fontFamily = FontFamily.Monospace
+                )
+            }
+        }
     }
 }

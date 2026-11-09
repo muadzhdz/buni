@@ -22,9 +22,22 @@ import dev.buni.core.BuniSettings
 import dev.buni.core.Language
 import dev.buni.core.LocalBuniLanguage
 import dev.buni.core.ThemeMode
+import dev.buni.core.buniString
 import dev.buni.service.BuniVpnService
 import dev.buni.theme.BuniTheme
+import dev.buni.theme.Emerald500
+import dev.buni.theme.buniColors
 import dev.buni.util.BuniAudio
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 
 class MainActivity : ComponentActivity() {
 
@@ -47,10 +60,15 @@ class MainActivity : ComponentActivity() {
         }
 
         val settings = BuniSettings(this)
+        val initialLocaleTag = if (settings.getLanguage() == Language.ID) "in" else "en"
+        androidx.appcompat.app.AppCompatDelegate.setApplicationLocales(
+            androidx.core.os.LocaleListCompat.forLanguageTags(initialLocaleTag)
+        )
 
         setContent {
             var currentThemeMode by remember { mutableStateOf(settings.getThemeMode()) }
             var currentLanguage by remember { mutableStateOf(settings.getLanguage()) }
+            var activeDnsLabel by remember { mutableStateOf(settings.getActiveDnsLabel()) }
 
             val systemInDark = isSystemInDarkTheme()
             val isDarkMode = when (currentThemeMode) {
@@ -64,6 +82,21 @@ class MainActivity : ComponentActivity() {
                     val isRunning by BuniVpnService.isRunning.collectAsState()
                     val stats by BuniVpnService.statsFlow.collectAsState()
                     val logs by BuniVpnService.logsFlow.collectAsState()
+                    var showVpnDisclosure by remember { mutableStateOf(false) }
+
+                    if (showVpnDisclosure) {
+                        VpnDisclosureDialog(
+                            onConfirm = {
+                                settings.setVpnConsentGiven(true)
+                                showVpnDisclosure = false
+                                BuniAudio.playPowerOn()
+                                prepareAndStartVpn()
+                            },
+                            onDismiss = {
+                                showVpnDisclosure = false
+                            }
+                        )
+                    }
 
                     AppShell(
                         isActive = isRunning,
@@ -72,6 +105,7 @@ class MainActivity : ComponentActivity() {
                         isDarkMode = isDarkMode,
                         currentThemeMode = currentThemeMode,
                         currentLanguage = currentLanguage,
+                        activeDnsLabel = activeDnsLabel,
                         onThemeModeChange = {
                             settings.setThemeMode(it)
                             currentThemeMode = it
@@ -89,15 +123,26 @@ class MainActivity : ComponentActivity() {
                             val newLang = if (currentLanguage == Language.EN) Language.ID else Language.EN
                             settings.setLanguage(newLang)
                             currentLanguage = newLang
+                            val localeTag = if (newLang == Language.ID) "in" else "en"
+                            androidx.appcompat.app.AppCompatDelegate.setApplicationLocales(
+                                androidx.core.os.LocaleListCompat.forLanguageTags(localeTag)
+                            )
                         },
                         onTogglePower = {
                             if (isRunning) {
                                 BuniAudio.playPowerOff()
                                 stopVpnService()
                             } else {
-                                BuniAudio.playPowerOn()
-                                prepareAndStartVpn()
+                                if (settings.isVpnConsentGiven()) {
+                                    BuniAudio.playPowerOn()
+                                    prepareAndStartVpn()
+                                } else {
+                                    showVpnDisclosure = true
+                                }
                             }
+                        },
+                        onDnsChanged = {
+                            activeDnsLabel = settings.getActiveDnsLabel()
                         }
                     )
                 }
@@ -127,4 +172,65 @@ class MainActivity : ComponentActivity() {
         }
         startService(intent)
     }
+}
+
+@Composable
+fun VpnDisclosureDialog(
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    val colors = buniColors
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = colors.surface,
+        shape = RoundedCornerShape(16.dp),
+        title = {
+            Text(
+                text = buniString("vpn_disclosure_title"),
+                color = colors.textPrimary,
+                fontFamily = FontFamily.Monospace,
+                fontWeight = FontWeight.Bold,
+                fontSize = 15.sp
+            )
+        },
+        text = {
+            Text(
+                text = buniString("vpn_disclosure_desc"),
+                color = colors.textSecondary,
+                fontFamily = FontFamily.Monospace,
+                fontSize = 12.sp,
+                lineHeight = 18.sp
+            )
+        },
+        confirmButton = {
+            TextButton(
+                onClick = onConfirm,
+                colors = ButtonDefaults.textButtonColors(
+                    contentColor = Emerald500
+                )
+            ) {
+                Text(
+                    text = buniString("vpn_disclosure_accept"),
+                    fontFamily = FontFamily.Monospace,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 12.sp
+                )
+            }
+        },
+        dismissButton = {
+            TextButton(
+                onClick = onDismiss,
+                colors = ButtonDefaults.textButtonColors(
+                    contentColor = colors.textMuted
+                )
+            ) {
+                Text(
+                    text = buniString("vpn_disclosure_cancel"),
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 12.sp
+                )
+            }
+        }
+    )
 }

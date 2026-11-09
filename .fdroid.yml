@@ -16,3 +16,10 @@ Builds:
     subdir: android
     gradle:
       - yes
+
+  - versionName: 0.2.0
+    versionCode: 2
+    commit: v0.2.0
+    subdir: android
+    gradle:
+      - yes

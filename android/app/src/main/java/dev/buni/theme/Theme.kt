@@ -87,6 +87,18 @@ fun BuniTheme(
     val colors = if (darkTheme) DarkPalette else LightPalette
     val colorScheme = if (darkTheme) BuniDarkColorScheme else BuniLightColorScheme
 
+    val view = androidx.compose.ui.platform.LocalView.current
+    if (!view.isInEditMode) {
+        androidx.compose.runtime.SideEffect {
+            val window = (view.context as? android.app.Activity)?.window
+            if (window != null) {
+                val insetsController = androidx.core.view.WindowCompat.getInsetsController(window, view)
+                insetsController.isAppearanceLightStatusBars = !darkTheme
+                insetsController.isAppearanceLightNavigationBars = !darkTheme
+            }
+        }
+    }
+
     CompositionLocalProvider(LocalBuniColors provides colors) {
         MaterialTheme(
             colorScheme = colorScheme,

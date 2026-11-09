@@ -31,7 +31,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -62,6 +64,7 @@ fun AboutScreen(
     val colors = buniColors
     val scrollState = rememberScrollState()
     val coroutineScope = rememberCoroutineScope()
+    val haptic = LocalHapticFeedback.current
 
     var isChecking by remember { mutableStateOf(false) }
     var updateAvailableVersion by remember { mutableStateOf<String?>(null) }
@@ -87,7 +90,10 @@ fun AboutScreen(
                     .clip(RoundedCornerShape(12.dp))
                     .background(colors.surface)
                     .border(1.dp, colors.border, RoundedCornerShape(12.dp))
-                    .clickable(onClick = onNavigateBack),
+                    .clickable(onClick = {
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        onNavigateBack()
+                    }),
                 contentAlignment = Alignment.Center
             ) {
                 ArrowBackIcon(
@@ -129,7 +135,7 @@ fun AboutScreen(
                     )
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(
-                        text = "${buniString("version_prefix")} 0.1.0-alpha",
+                        text = "${buniString("version_prefix")} ${dev.buni.core.BuniVersion.NAME}",
                         color = colors.textMuted,
                         fontSize = 12.sp,
                         fontFamily = FontFamily.Monospace
@@ -155,6 +161,7 @@ fun AboutScreen(
                 .background(colors.surface)
                 .border(1.dp, if (updateAvailableVersion != null) Emerald500 else colors.border, RoundedCornerShape(12.dp))
                 .clickable {
+                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                     if (updateDownloadUrl != null) {
                         val intent = Intent(Intent.ACTION_VIEW, Uri.parse(updateDownloadUrl))
                         context.startActivity(intent)
@@ -164,12 +171,12 @@ fun AboutScreen(
                         coroutineScope.launch {
                             val result = checkForUpdatesFromGitHub()
                             isChecking = false
-                            if (result != null && result.first != "v0.1.0-alpha") {
+                            if (result != null && result.first != "v${dev.buni.core.BuniVersion.NAME}") {
                                 updateAvailableVersion = result.first
                                 updateDownloadUrl = result.second
                                 updateCheckResultText = result.first
                             } else {
-                                updateCheckResultText = "v0.1.0-alpha"
+                                updateCheckResultText = "v${dev.buni.core.BuniVersion.NAME}"
                             }
                         }
                     }
@@ -338,6 +345,7 @@ private fun AboutLinkItem(
     onClick: () -> Unit
 ) {
     val colors = buniColors
+    val haptic = LocalHapticFeedback.current
 
     Row(
         modifier = Modifier
@@ -345,7 +353,10 @@ private fun AboutLinkItem(
             .clip(RoundedCornerShape(12.dp))
             .background(colors.surface)
             .border(1.dp, colors.border, RoundedCornerShape(12.dp))
-            .clickable(onClick = onClick)
+            .clickable(onClick = {
+                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                onClick()
+            })
             .padding(horizontal = 16.dp, vertical = 14.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
