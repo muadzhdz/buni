@@ -2,25 +2,20 @@
 
 The hidden network shield.
 
-A defensive, high-performance network privacy client, in-memory DNS sinkhole, and WireGuard uplink orchestrator for Android.
+A defensive, high-performance network privacy shield and in-memory DNS sinkhole for Android.
 
 ## Architecture
 
-- **SHIELD**: Zero-latency userspace DNS sinkhole on `tun0` (`10.233.0.1/30`). Evaluates DNS queries against an in-memory hash trie, terminating tracker and ad telemetries at `0.0.0.0` before WAN transit. Clean queries resolve over protected DoH (RFC 8484) sockets.
-- **TUNNEL**: Full-device encapsulation (`0.0.0.0/0`, `::/0`) into authenticated ChaCha20-Poly1305 WireGuard datagrams.
+- **SHIELD**: Zero-latency userspace DNS sinkhole using Android `VpnService` bound to `10.233.0.1/30` routing only DNS traffic (`10.233.0.2/32`). Evaluates DNS queries against an in-memory blocklist with granular category controls (Ads, Trackers, Malware).
+- **SYNTHETIC RESPONSES**: Sinkholed queries receive RFC-compliant immediate responses (0.0.0.0 for IPv4 A queries, `::` for IPv6 AAAA queries) with 0ms roundtrip latency.
+- **ENCRYPTED RESOLVER**: Permitted queries resolve over protected TLS sockets using DNS over HTTPS (DoH / RFC 8484) or selected upstream DNS servers.
+- **PER-APP BYPASS**: Applications can be selectively excluded from interception to route directly to WAN.
 
 ## Building
 
 ```bash
 cd android
 ./gradlew assembleRelease
-```
-
-## Verification
-
-```bash
-cd core
-go test -v -race ./...
 ```
 
 ## License

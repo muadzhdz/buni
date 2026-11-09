@@ -71,20 +71,11 @@ class BuniVpnService : VpnService() {
         loadBlocklist()
 
         val settings = dev.buni.core.BuniSettings(this)
-        val mode = settings.getEngineMode()
         val lang = settings.getLanguage()
 
         try {
-            val statusTitle = if (mode == dev.buni.core.EngineMode.TUNNEL) {
-                dev.buni.core.BuniStrings.get("notif_tunnel_active", lang)
-            } else {
-                dev.buni.core.BuniStrings.get("notif_shield_active", lang)
-            }
-            val statusDesc = if (mode == dev.buni.core.EngineMode.TUNNEL) {
-                dev.buni.core.BuniStrings.get("notif_tunnel_desc", lang)
-            } else {
-                dev.buni.core.BuniStrings.get("notif_shield_desc", lang)
-            }
+            val statusTitle = dev.buni.core.BuniStrings.get("notif_shield_active", lang)
+            val statusDesc = dev.buni.core.BuniStrings.get("notif_shield_desc", lang)
             val notification = buildNotification(statusTitle, statusDesc)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 startForeground(
@@ -99,16 +90,11 @@ class BuniVpnService : VpnService() {
         }
 
         val builder = Builder().apply {
-            setSession(if (mode == dev.buni.core.EngineMode.TUNNEL) "Buni Tunnel" else "Buni Shield")
+            setSession("Buni Shield")
             setMtu(1500)
             addAddress("10.233.0.1", 30)
             addDnsServer("10.233.0.2")
-
-            if (mode == dev.buni.core.EngineMode.TUNNEL) {
-                addRoute("0.0.0.0", 0)
-            } else {
-                addRoute("10.233.0.2", 32)
-            }
+            addRoute("10.233.0.2", 32)
             setBlocking(true)
 
             val whitelisted = settings.getWhitelistedPackages()
@@ -128,17 +114,7 @@ class BuniVpnService : VpnService() {
                 serviceScope.launch {
                     val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
                     val now = timeFormat.format(Date())
-                    if (mode == dev.buni.core.EngineMode.TUNNEL) {
-                        val endpoint = settings.getWireGuardEndpoint()
-                        val pubKey = settings.getWireGuardPublicKey()
-                        if (endpoint.isNotEmpty() && pubKey.isNotEmpty()) {
-                            emitLog("[$now] WG $endpoint -> ${dev.buni.core.BuniStrings.get("log_wg_configured", lang)}")
-                        } else {
-                            emitLog("[$now] ${dev.buni.core.BuniStrings.get("log_wg_warn", lang)}")
-                        }
-                    } else {
-                        emitLog("[$now] ${dev.buni.core.BuniStrings.get("log_shield_active", lang)}")
-                    }
+                    emitLog("[$now] ${dev.buni.core.BuniStrings.get("log_shield_active", lang)}")
                     runPacketLoop(pfd)
                 }
             }
@@ -227,8 +203,9 @@ class BuniVpnService : VpnService() {
         val domain = parseDomainFromDns(dnsPayload)
         val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
         val now = timeFormat.format(Date())
+        val settings = dev.buni.core.BuniSettings(this)
 
-        if (domain.isNotEmpty() && isDomainBlocked(domain)) {
+        if (domain.isNotEmpty() && isDomainBlocked(domain, settings)) {
             blockedQueries.incrementAndGet()
             val sinkReply = buildSinkholeDnsResponse(dnsPayload)
             if (sinkReply != null) {
@@ -406,12 +383,22 @@ class BuniVpnService : VpnService() {
         }
     }
 
-    private fun isDomainBlocked(domain: String): Boolean {
+    private fun isDomainBlocked(domain: String, settings: dev.buni.core.BuniSettings): Boolean {
         val d = domain.lowercase(Locale.ROOT)
-        if (blockedDomains.contains(d)) {
-            return true
+        val matched = findMatchingBlockedDomain(d) ?: return false
+        val category = classifyDomain(matched)
+        return when (category) {
+            DomainCategory.ADS -> settings.isFilterAdsEnabled()
+            DomainCategory.TRACKERS -> settings.isFilterTrackersEnabled()
+            DomainCategory.MALWARE -> settings.isFilterMalwareEnabled()
         }
-        var sub = d
+    }
+
+    private fun findMatchingBlockedDomain(domain: String): String? {
+        if (blockedDomains.contains(domain)) {
+            return domain
+        }
+        var sub = domain
         while (true) {
             val idx = sub.indexOf('.')
             if (idx == -1) {
@@ -419,10 +406,27 @@ class BuniVpnService : VpnService() {
             }
             sub = sub.substring(idx + 1)
             if (blockedDomains.contains(sub)) {
-                return true
+                return sub
             }
         }
-        return false
+        return null
+    }
+
+    private enum class DomainCategory {
+        ADS,
+        TRACKERS,
+        MALWARE
+    }
+
+    private fun classifyDomain(domain: String): DomainCategory {
+        val lower = domain.lowercase(Locale.ROOT)
+        if (lower.contains("malware") || lower.contains("phish") || lower.contains("sec.miui") || lower.contains("installer") || lower.contains("diagmon")) {
+            return DomainCategory.MALWARE
+        }
+        if (lower.contains("track") || lower.contains("telemetry") || lower.contains("metric") || lower.contains("stat") || lower.contains("analytics") || lower.contains("log") || lower.contains("appsflyer") || lower.contains("adjust") || lower.contains("branch.io") || lower.contains("pixel")) {
+            return DomainCategory.TRACKERS
+        }
+        return DomainCategory.ADS
     }
 
     private fun parseDomainFromDns(wire: ByteArray): String {
@@ -461,13 +465,23 @@ class BuniVpnService : VpnService() {
             }
             offset += len
         }
-        offset += 4
-        if (offset > query.size) {
+        if (offset + 4 > query.size) {
             return null
         }
+        val qType = ((query[offset].toInt() and 0xFF) shl 8) or (query[offset + 1].toInt() and 0xFF)
+        val questionEnd = offset + 4
 
-        val resp = ByteArray(offset + 16)
-        System.arraycopy(query, 0, resp, 0, offset)
+        val isA = (qType == 1)
+        val isAaaa = (qType == 28)
+
+        val recordLen = when {
+            isA -> 16
+            isAaaa -> 28
+            else -> 0
+        }
+
+        val resp = ByteArray(questionEnd + recordLen)
+        System.arraycopy(query, 0, resp, 0, questionEnd)
 
         var flags = ((resp[2].toInt() and 0xFF) shl 8) or (resp[3].toInt() and 0xFF)
         flags = flags or 0x8400
@@ -478,33 +492,48 @@ class BuniVpnService : VpnService() {
         resp[4] = 0x00
         resp[5] = 0x01
         resp[6] = 0x00
-        resp[7] = 0x01
+        resp[7] = if (recordLen > 0) 0x01.toByte() else 0x00.toByte()
         resp[8] = 0x00
         resp[9] = 0x00
         resp[10] = 0x00
         resp[11] = 0x00
 
-        var idx = offset
-        resp[idx++] = 0xC0.toByte()
-        resp[idx++] = 0x0C.toByte()
-
-        resp[idx++] = 0x00.toByte()
-        resp[idx++] = 0x01.toByte()
-        resp[idx++] = 0x00.toByte()
-        resp[idx++] = 0x01.toByte()
-
-        resp[idx++] = 0x00.toByte()
-        resp[idx++] = 0x00.toByte()
-        resp[idx++] = 0x01.toByte()
-        resp[idx++] = 0x2C.toByte()
-
-        resp[idx++] = 0x00.toByte()
-        resp[idx++] = 0x04.toByte()
-
-        resp[idx++] = 0.toByte()
-        resp[idx++] = 0.toByte()
-        resp[idx++] = 0.toByte()
-        resp[idx++] = 0.toByte()
+        if (isA) {
+            var idx = questionEnd
+            resp[idx++] = 0xC0.toByte()
+            resp[idx++] = 0x0C.toByte()
+            resp[idx++] = 0x00.toByte()
+            resp[idx++] = 0x01.toByte()
+            resp[idx++] = 0x00.toByte()
+            resp[idx++] = 0x01.toByte()
+            resp[idx++] = 0x00.toByte()
+            resp[idx++] = 0x00.toByte()
+            resp[idx++] = 0x01.toByte()
+            resp[idx++] = 0x2C.toByte()
+            resp[idx++] = 0x00.toByte()
+            resp[idx++] = 0x04.toByte()
+            resp[idx++] = 0.toByte()
+            resp[idx++] = 0.toByte()
+            resp[idx++] = 0.toByte()
+            resp[idx++] = 0.toByte()
+        } else if (isAaaa) {
+            var idx = questionEnd
+            resp[idx++] = 0xC0.toByte()
+            resp[idx++] = 0x0C.toByte()
+            resp[idx++] = 0x00.toByte()
+            resp[idx++] = 0x1C.toByte()
+            resp[idx++] = 0x00.toByte()
+            resp[idx++] = 0x01.toByte()
+            resp[idx++] = 0x00.toByte()
+            resp[idx++] = 0x00.toByte()
+            resp[idx++] = 0x01.toByte()
+            resp[idx++] = 0x2C.toByte()
+            resp[idx++] = 0x00.toByte()
+            resp[idx++] = 0x10.toByte()
+            for (i in 0 until 16) {
+                resp[idx++] = 0.toByte()
+            }
+        }
 
         return resp
     }

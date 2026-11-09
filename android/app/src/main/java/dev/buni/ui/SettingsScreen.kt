@@ -80,8 +80,6 @@ fun SettingsScreen(
     var filterTrackers by remember { mutableStateOf(settings.isFilterTrackersEnabled()) }
     var filterMalware by remember { mutableStateOf(settings.isFilterMalwareEnabled()) }
     var selectedDns by remember { mutableStateOf(settings.getUpstreamDns()) }
-    var endpoint by remember { mutableStateOf(settings.getWireGuardEndpoint()) }
-    var peerPublicKey by remember { mutableStateOf(settings.getWireGuardPublicKey()) }
 
     val dnsOptions = listOf(
         UpstreamDnsOption("Cloudflare DNS", "1.1.1.1", buniString("dns_desc_cloudflare")),
@@ -220,100 +218,6 @@ fun SettingsScreen(
                 )
             }
         }
-
-        Spacer(modifier = Modifier.height(24.dp))
-
-        SectionHeader(title = buniString("section_node"))
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(12.dp))
-                .background(colors.surface)
-                .border(1.dp, colors.border, RoundedCornerShape(12.dp))
-                .padding(horizontal = 16.dp, vertical = 14.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column {
-                Text(
-                    text = buniString("protocol"),
-                    color = colors.textMuted,
-                    fontSize = 10.sp,
-                    fontFamily = FontFamily.Monospace,
-                    letterSpacing = 1.sp
-                )
-                Spacer(modifier = Modifier.height(2.dp))
-                Text(
-                    text = "WireGuard / ChaCha20",
-                    color = colors.textPrimary,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.SemiBold
-                )
-            }
-
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    modifier = Modifier
-                        .size(6.dp)
-                        .clip(CircleShape)
-                        .background(if (endpoint.isNotEmpty()) Emerald500 else colors.textMuted)
-                )
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(
-                    text = if (endpoint.isNotEmpty()) buniString("node_ready") else buniString("node_unconfigured"),
-                    color = if (endpoint.isNotEmpty()) colors.textPrimary else colors.textMuted,
-                    fontSize = 11.sp,
-                    fontFamily = FontFamily.Monospace
-                )
-            }
-        }
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        OutlinedTextField(
-            value = endpoint,
-            onValueChange = {
-                endpoint = it
-                settings.setWireGuardEndpoint(it)
-            },
-            placeholder = { Text(buniString("example_endpoint"), color = colors.textMuted, fontSize = 13.sp) },
-            singleLine = true,
-            modifier = Modifier.fillMaxWidth(),
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedContainerColor = colors.surface,
-                unfocusedContainerColor = colors.surface,
-                focusedBorderColor = Emerald500,
-                unfocusedBorderColor = colors.border,
-                focusedTextColor = colors.textPrimary,
-                unfocusedTextColor = colors.textPrimary
-            ),
-            shape = RoundedCornerShape(8.dp)
-        )
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        OutlinedTextField(
-            value = peerPublicKey,
-            onValueChange = {
-                peerPublicKey = it
-                settings.setWireGuardPublicKey(it)
-            },
-            placeholder = { Text(buniString("placeholder_pubkey"), color = colors.textMuted, fontSize = 13.sp) },
-            singleLine = true,
-            modifier = Modifier.fillMaxWidth(),
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedContainerColor = colors.surface,
-                unfocusedContainerColor = colors.surface,
-                focusedBorderColor = Emerald500,
-                unfocusedBorderColor = colors.border,
-                focusedTextColor = colors.textPrimary,
-                unfocusedTextColor = colors.textPrimary
-            ),
-            shape = RoundedCornerShape(8.dp)
-        )
 
         Spacer(modifier = Modifier.height(100.dp))
     }

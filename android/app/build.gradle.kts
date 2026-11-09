@@ -7,7 +7,6 @@ plugins {
 android {
     namespace = "dev.buni"
     compileSdk = 35
-    ndkVersion = "28.2.13676358"
 
     defaultConfig {
         applicationId = "dev.buni"

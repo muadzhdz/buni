@@ -3,11 +3,6 @@ package dev.buni.core
 import android.content.Context
 import android.content.SharedPreferences
 
-enum class EngineMode {
-    SHIELD,
-    TUNNEL
-}
-
 enum class ThemeMode {
     SYSTEM,
     DARK,
@@ -101,31 +96,6 @@ class BuniSettings(context: Context) {
         prefs.edit().putString(KEY_LANGUAGE, lang.name).apply()
     }
 
-    fun getWireGuardEndpoint(): String {
-        return prefs.getString(KEY_WG_ENDPOINT, "") ?: ""
-    }
-
-    fun setWireGuardEndpoint(endpoint: String) {
-        prefs.edit().putString(KEY_WG_ENDPOINT, endpoint).apply()
-    }
-
-    fun getWireGuardPublicKey(): String {
-        return prefs.getString(KEY_WG_PUBKEY, "") ?: ""
-    }
-
-    fun setWireGuardPublicKey(pubKey: String) {
-        prefs.edit().putString(KEY_WG_PUBKEY, pubKey).apply()
-    }
-
-    fun getEngineMode(): EngineMode {
-        val modeStr = prefs.getString(KEY_ENGINE_MODE, "SHIELD") ?: "SHIELD"
-        return if (modeStr == "TUNNEL") EngineMode.TUNNEL else EngineMode.SHIELD
-    }
-
-    fun setEngineMode(mode: EngineMode) {
-        prefs.edit().putString(KEY_ENGINE_MODE, mode.name).apply()
-    }
-
     companion object {
         private const val PREFS_NAME = "buni_user_settings"
         private const val KEY_WHITELIST = "pref_whitelisted_apps"
@@ -133,11 +103,8 @@ class BuniSettings(context: Context) {
         private const val KEY_FILTER_ADS = "pref_filter_ads"
         private const val KEY_FILTER_TRACKERS = "pref_filter_trackers"
         private const val KEY_FILTER_MALWARE = "pref_filter_malware"
-        private const val KEY_WG_ENDPOINT = "pref_wg_endpoint"
-        private const val KEY_WG_PUBKEY = "pref_wg_pubkey"
         private const val KEY_DARK_MODE = "pref_dark_mode"
         private const val KEY_LANGUAGE = "pref_language"
-        private const val KEY_ENGINE_MODE = "pref_engine_mode"
         private const val KEY_THEME_MODE = "pref_theme_mode"
     }
 }

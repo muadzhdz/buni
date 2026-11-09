@@ -1,1 +1,1 @@
-The hidden network shield. Zero-latency DNS sinkhole and WireGuard tunnel for Android.
+The hidden network shield. Zero-latency DNS sinkhole and DoH privacy protector for Android.

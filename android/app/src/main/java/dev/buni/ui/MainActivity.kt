@@ -51,7 +51,6 @@ class MainActivity : ComponentActivity() {
         setContent {
             var currentThemeMode by remember { mutableStateOf(settings.getThemeMode()) }
             var currentLanguage by remember { mutableStateOf(settings.getLanguage()) }
-            var currentMode by remember { mutableStateOf(settings.getEngineMode()) }
 
             val systemInDark = isSystemInDarkTheme()
             val isDarkMode = when (currentThemeMode) {
@@ -73,11 +72,6 @@ class MainActivity : ComponentActivity() {
                         isDarkMode = isDarkMode,
                         currentThemeMode = currentThemeMode,
                         currentLanguage = currentLanguage,
-                        currentMode = currentMode,
-                        onModeChange = {
-                            settings.setEngineMode(it)
-                            currentMode = it
-                        },
                         onThemeModeChange = {
                             settings.setThemeMode(it)
                             currentThemeMode = it
