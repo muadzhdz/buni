@@ -2,7 +2,7 @@
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="art/buni-logo-dark.svg">
     <source media="(prefers-color-scheme: light)" srcset="art/buni-logo-light.svg">
-    <img src="art/buni-logo-dark.svg" width="128" height="128" alt="Buni Logo">
+    <img src="art/buni-logo-dark.svg" width="96" height="96" alt="Buni Logo">
   </picture>
 </p>
 
@@ -17,7 +17,6 @@
   <a href="https://developer.android.com"><img src="https://img.shields.io/badge/Platform-Android_8.0+_(API_26+)-09090b?style=flat-square&logo=android&logoColor=white" alt="Platform" /></a>
   <a href="https://kotlinlang.org"><img src="https://img.shields.io/badge/Language-Kotlin_2.0-7F52FF?style=flat-square&logo=kotlin&logoColor=white" alt="Kotlin" /></a>
   <a href="https://developer.android.com/jetpack/compose"><img src="https://img.shields.io/badge/UI-Jetpack_Compose-4285F4?style=flat-square&logo=jetpackcompose&logoColor=white" alt="Jetpack Compose" /></a>
-  <a href="https://f-droid.org"><img src="https://img.shields.io/badge/F--Droid-Ready-1976D2?style=flat-square&logo=fdroid&logoColor=white" alt="F-Droid" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-GPL--3.0-09090b?style=flat-square" alt="License" /></a>
 </p>
 
@@ -25,43 +24,28 @@
 
 ## Overview
 
-**Buni** (from Sundanese / Old Malay *sembunyi* — hidden, shielded) is a lightweight, defensive, on-device network privacy shield and in-memory DNS sinkhole for Android.
+**Buni** is a lightweight, defensive, on-device network privacy shield and in-memory DNS sinkhole for Android.
 
-Unlike commercial VPN services that route all your personal traffic to third-party remote servers, Buni operates **100% locally on your device** without root privileges. It establishes a loopback tunnel via Android `VpnService` that intercepts only DNS queries on port 53, evaluates them in memory, and immediately drops ads, telemetry, trackers, and invasive OEM background bloatware before any data leaves your phone.
+Operating **100% locally on your device** without root privileges, Buni establishes a loopback tunnel via Android `VpnService` that intercepts only UDP port 53 DNS traffic across both IPv4 and IPv6. Queries matching blocklist rules are dropped instantly at 0ms latency with synthetic responses (`0.0.0.0` / `::`), preventing ads, OEM telemetry, and invasive mobile trackers from ever leaving your device.
 
 ---
 
 ## Architecture
 
-```
-                 [ Android Applications ]
-                            │
-               (DNS Queries - UDP Port 53)
-                            ▼
-              ┌───────────────────────────┐
-              │  Android VpnService Loop  │
-              │   tun0 (10.233.0.1/30)    │
-              └─────────────┬─────────────┘
-                            │
-                [ In-Memory Domain Trie ]
-                            │
-             ┌──────────────┴──────────────┐
-             ▼                             ▼
-     [ Blocked Domain ]            [ Clean Domain ]
-      • Ads & Popups                • Encrypted Uplink
-      • OEM Telemetry               • Protected DoH / Custom
-      • Mobile Trackers                            │
-             │                                     ▼
-             ▼                            (Internet / WAN)
-      Synthetic Reply
-   (0.0.0.0 / :: in 0ms)
-```
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="art/buni-architecture-dark.svg">
+    <source media="(prefers-color-scheme: light)" srcset="art/buni-architecture-light.svg">
+    <img src="art/buni-architecture-dark.svg" width="100%" alt="Buni Architecture Pipeline">
+  </picture>
+</p>
 
-- **Local Zero-Latency Sinkhole**: Intercepts UDP port 53 traffic routed strictly to `10.233.0.2/32` (IPv4) and `fd00:1:fd00:1::2/128` (IPv6). Queries matching blocklist rules are immediately answered with synthetic RFC-compliant replies (`0.0.0.0` for IPv4 A, `::` for IPv6 AAAA, NODATA for others) with 0ms roundtrip.
-- **Encrypted DNS Uplink**: Permitted queries resolve through protected TLS sockets via DNS over HTTPS (DoH / RFC 8484) or selected upstream resolvers (Cloudflare, Quad9, AdGuard, Google).
-- **Per-App Split Tunneling**: Selectively exclude specific applications to bypass the shield interface directly to cellular/Wi-Fi.
-- **Granular Category Filters**: Real-time toggles for ad networks, mobile telemetry/trackers, and malicious OEM endpoints.
-- **Dual Aesthetic Theme Engine**: Seamless switching between high-contrast daylight Zinc and OLED obsidian stealth themes.
+- **Dual-Stack DNS Sinkhole**: Intercepts UDP port 53 traffic routed to `10.233.0.2/32` (IPv4) and `fd00:1:fd00:1::2/128` (IPv6) with RFC 8200 checksum calculation to prevent carrier IPv6 DNS leaks.
+- **89,099 Curated Rules**: High-density blocking for OEM vendor bloatware (ColorOS, MIUI, OriginOS, One UI, HiOS) and mobile ad SDKs (AdMob, UnityAds, AppLovin, ironSource, Pangle, InMobi).
+- **Private DNS Guard**: Detects Android 9+ Private DNS (DNS-over-TLS on port 853) bypass and alerts users directly on the dashboard with 1-tap system settings access.
+- **Protected Resolver Uplink**: Permitted queries resolve through protected sockets via DNS-over-HTTPS (DoH / RFC 8484) or upstream resolvers (Cloudflare, Quad9, AdGuard, Google, Custom).
+- **Per-App Bypass**: Granular control to exempt specific applications directly to WAN without filtering.
+- **Adaptive Contrast Theme**: Obsidian dark and daylight zinc themes with dynamic status bar and navigation bar contrast synchronization.
 
 ---
 
@@ -73,14 +57,8 @@ Unlike commercial VPN services that route all your personal traffic to third-par
 - Pure JVM / Zero NDK required
 
 ```bash
-# Clone the repository
 git clone https://github.com/muadzhdz/buni.git
 cd buni/android
-
-# Build Debug APK
-./gradlew assembleDebug
-
-# Build Release APK
 ./gradlew assembleRelease
 ```
 
@@ -91,23 +69,13 @@ The output APK will be located at:
 
 ## Standalone Development Engine
 
-For desktop and Linux systems development, a standalone Go DNS filtering engine and CLI tool is available under `core/`:
+A standalone Go DNS filtering engine and CLI harness is available under `core/`:
 
 ```bash
 cd core
-go test -v ./...
+go test -v -race ./...
 go run ./cmd/buni-dev
 ```
-
----
-
-## Distribution & Updates
-
-| Channel | Delivery Method | Verification |
-| :--- | :--- | :--- |
-| **F-Droid** | Automatic background updates via F-Droid client | Built from source and signed by F-Droid |
-| **GitHub Releases** | In-app notification / Direct APK download | Signed by project release keystore |
-| **Obtainium** | Tracked and installed directly via GitHub API | Matches GitHub release tags |
 
 ---
 
