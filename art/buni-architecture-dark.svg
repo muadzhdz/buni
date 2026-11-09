@@ -1,0 +1,86 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 360" width="960" height="360">
+  <defs>
+    <linearGradient id="darkBg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#09090B"/>
+      <stop offset="100%" stop-color="#121215"/>
+    </linearGradient>
+    <marker id="arrowDark" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#52525B"/>
+    </marker>
+    <marker id="arrowEmerald" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#10B981"/>
+    </marker>
+    <marker id="arrowSky" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#38BDF8"/>
+    </marker>
+  </defs>
+
+  <rect width="960" height="360" rx="16" fill="url(#darkBg)" stroke="#27272A" stroke-width="1"/>
+
+  <text x="40" y="44" fill="#71717A" font-family="monospace" font-size="11" font-weight="600" letter-spacing="1.5">PIPELINE :: ON-DEVICE DUAL-STACK DNS SINKHOLE</text>
+  <circle cx="910" cy="40" r="4" fill="#10B981"/>
+  <text x="898" y="44" fill="#10B981" font-family="monospace" font-size="11" font-weight="600" text-anchor="end">READY</text>
+
+  <g transform="translate(40, 76)">
+    <rect width="210" height="236" rx="12" fill="#18181B" stroke="#27272A" stroke-width="1"/>
+    <rect x="16" y="16" width="36" height="36" rx="8" fill="#27272A"/>
+    <circle cx="28" cy="28" r="3" fill="#A1A1AA"/>
+    <circle cx="40" cy="28" r="3" fill="#A1A1AA"/>
+    <circle cx="28" cy="40" r="3" fill="#A1A1AA"/>
+    <circle cx="40" cy="40" r="3" fill="#A1A1AA"/>
+    
+    <text x="16" y="80" fill="#FAFAFA" font-family="system-ui, sans-serif" font-size="15" font-weight="700">Android Apps</text>
+    <text x="16" y="100" fill="#A1A1AA" font-family="system-ui, sans-serif" font-size="11">Network Applications</text>
+
+    <line x1="16" y1="116" x2="194" y2="116" stroke="#27272A" stroke-width="1"/>
+
+    <text x="16" y="140" fill="#71717A" font-family="monospace" font-size="10">TARGET PROTOCOL</text>
+    <text x="16" y="158" fill="#D4D4D8" font-family="monospace" font-size="11" font-weight="600">UDP Port 53</text>
+    
+    <text x="16" y="186" fill="#71717A" font-family="monospace" font-size="10">QUERY TYPES</text>
+    <text x="16" y="204" fill="#10B981" font-family="monospace" font-size="11" font-weight="600">Type A &amp; AAAA</text>
+  </g>
+
+  <path d="M 250 194 L 298 194" stroke="#52525B" stroke-width="1.5" marker-end="url(#arrowDark)"/>
+
+  <g transform="translate(304, 76)">
+    <rect width="270" height="236" rx="12" fill="#18181B" stroke="#27272A" stroke-width="1"/>
+    
+    <rect x="16" y="16" width="36" height="36" rx="8" fill="#27272A"/>
+    <path d="M 26 28 L 34 22 L 42 28 L 42 38 L 34 44 L 26 38 Z" fill="none" stroke="#10B981" stroke-width="2"/>
+
+    <text x="16" y="80" fill="#FAFAFA" font-family="system-ui, sans-serif" font-size="15" font-weight="700">tun0 Network Shield</text>
+    <text x="16" y="100" fill="#A1A1AA" font-family="system-ui, sans-serif" font-size="11">Android VpnService Loopback</text>
+
+    <line x1="16" y1="116" x2="254" y2="116" stroke="#27272A" stroke-width="1"/>
+
+    <text x="16" y="140" fill="#71717A" font-family="monospace" font-size="10">IPv4 INTERCEPT</text>
+    <text x="16" y="158" fill="#D4D4D8" font-family="monospace" font-size="11">10.233.0.1/30</text>
+    
+    <text x="16" y="186" fill="#71717A" font-family="monospace" font-size="10">IPv6 INTERCEPT</text>
+    <text x="16" y="204" fill="#D4D4D8" font-family="monospace" font-size="11">fd00:1:fd00:1::1/128</text>
+  </g>
+
+  <path d="M 574 150 C 600 150, 606 130, 628 130" fill="none" stroke="#10B981" stroke-width="1.5" marker-end="url(#arrowEmerald)"/>
+  <path d="M 574 238 C 600 238, 606 258, 628 258" fill="none" stroke="#38BDF8" stroke-width="1.5" marker-end="url(#arrowSky)"/>
+
+  <g transform="translate(634, 76)">
+    <rect width="286" height="106" rx="12" fill="#141E18" stroke="#065F46" stroke-width="1"/>
+    <rect x="16" y="14" width="82" height="20" rx="4" fill="#064E3B"/>
+    <text x="57" y="28" fill="#34D399" font-family="monospace" font-size="9" font-weight="700" text-anchor="middle">SINKHOLE</text>
+
+    <text x="16" y="56" fill="#FAFAFA" font-family="system-ui, sans-serif" font-size="13" font-weight="700">Dropped Immediately (0ms)</text>
+    <text x="16" y="74" fill="#A1A1AA" font-family="system-ui, sans-serif" font-size="11">Matches 89,099 Curated Domains</text>
+    <text x="16" y="92" fill="#34D399" font-family="monospace" font-size="10">Replies 0.0.0.0 / :: in 0ms</text>
+  </g>
+
+  <g transform="translate(634, 206)">
+    <rect width="286" height="106" rx="12" fill="#101923" stroke="#075985" stroke-width="1"/>
+    <rect x="16" y="14" width="82" height="20" rx="4" fill="#0C4A6E"/>
+    <text x="57" y="28" fill="#38BDF8" font-family="monospace" font-size="9" font-weight="700" text-anchor="middle">PERMITTED</text>
+
+    <text x="16" y="56" fill="#FAFAFA" font-family="system-ui, sans-serif" font-size="13" font-weight="700">Protected Uplink Resolution</text>
+    <text x="16" y="74" fill="#A1A1AA" font-family="system-ui, sans-serif" font-size="11">Forwarded Over Socket Protection</text>
+    <text x="16" y="92" fill="#38BDF8" font-family="monospace" font-size="10">Cloudflare · Quad9 · AdGuard · Custom</text>
+  </g>
+</svg>
